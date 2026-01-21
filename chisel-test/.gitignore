@@ -1,0 +1,13 @@
+build
+out
+.bloop
+.metals
+.scalafmt.conf
+
+!*.scala
+!Makefile
+!LICENSE
+!build.mill
+!.gitignore
+!.mill-jvm-opts
+!.mill-version
