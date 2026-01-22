@@ -1098,13 +1098,17 @@ class RISCVCtrlGenerator:
     
     def __init__(self):
         self.instructions: List[Instruction] = []
-        self.records_file = str(Path(__file__).parent.resolve() / "records.json")
+        
+        # 获取配置目录路径
+        self.settings = QSettings("rvctrl-gender", "settings")
+        
+        # 在配置目录下创建records.json文件
+        config_dir = Path(self.settings.fileName()).parent
+        os.makedirs(config_dir, exist_ok=True)
+        self.records_file = str(config_dir / "records.json")
         
         # 确保记录目录存在
         os.makedirs(os.path.dirname(self.records_file), exist_ok=True)
-        
-        # 加载设置
-        self.settings = QSettings("rvctrl-gender", "settings")
     
     def load_csv(self, filepath: str) -> bool:
         """加载CSV文件"""
@@ -2253,6 +2257,26 @@ class MainWindow(QMainWindow):
         scroll_area.setWidgetResizable(True)
         scroll_widget = QWidget()
         self.value_container_layout = QVBoxLayout()
+        
+        # 添加提示标签
+        self.value_hint_label = QLabel("请添加值")
+        self.value_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if self.current_theme == "dark":
+            self.value_hint_label.setStyleSheet("""
+                color: #888888;
+                font-size: 14px;
+                font-style: italic;
+                padding: 40px;
+            """)
+        else:
+            self.value_hint_label.setStyleSheet("""
+                color: #999999;
+                font-size: 14px;
+                font-style: italic;
+                padding: 40px;
+            """)
+        self.value_container_layout.addWidget(self.value_hint_label)
+        
         scroll_widget.setLayout(self.value_container_layout)
         scroll_area.setWidget(scroll_widget)
         
@@ -2277,8 +2301,8 @@ class MainWindow(QMainWindow):
         
         panel.setLayout(layout)
         
-        # 初始添加一个值部件
-        self.add_value_widget()
+        # 初始不添加任何值部件
+        self.value_widgets = []
         
         return panel
     
@@ -2431,6 +2455,10 @@ class MainWindow(QMainWindow):
     
     def add_value_widget(self):
         """添加值配置部件"""
+        # 如果是第一个值部件，隐藏提示标签
+        if len(self.value_widgets) == 0 and hasattr(self, 'value_hint_label'):
+            self.value_hint_label.hide()
+        
         widget = ValueConfigWidget(
             self,
             f"Value{len(self.value_widgets) + 1}",
@@ -2443,9 +2471,13 @@ class MainWindow(QMainWindow):
     
     def remove_last_value_widget(self):
         """删除最后一个值配置部件"""
-        if len(self.value_widgets) > 1:
+        if len(self.value_widgets) > 0:
             widget = self.value_widgets.pop()
             widget.deleteLater()
+            
+            # 如果没有值部件了，显示提示标签
+            if len(self.value_widgets) == 0 and hasattr(self, 'value_hint_label'):
+                self.value_hint_label.show()
     
     def on_config_changed(self):
         """配置变化时的处理"""
@@ -2468,9 +2500,17 @@ class MainWindow(QMainWindow):
             widget.deleteLater()
         self.value_widgets.clear()
         
+        # 显示提示标签
+        if hasattr(self, 'value_hint_label'):
+            self.value_hint_label.show()
+        
         # 添加值部件
         values = record.get('values', {})
         for value_name, instructions in values.items():
+            # 隐藏提示标签
+            if hasattr(self, 'value_hint_label'):
+                self.value_hint_label.hide()
+                
             widget = ValueConfigWidget(
                 self,
                 value_name,
@@ -2482,9 +2522,9 @@ class MainWindow(QMainWindow):
             self.value_container_layout.addWidget(widget)
             self.value_widgets.append(widget)
         
-        # 如果没有任何值部件，添加一个默认的
-        if not self.value_widgets:
-            self.add_value_widget()
+        # 如果没有任何值部件，确保提示标签显示
+        if not self.value_widgets and hasattr(self, 'value_hint_label'):
+            self.value_hint_label.show()
         
         # 生成并显示代码
         code = self.generator.generate_chisel_code(record)
