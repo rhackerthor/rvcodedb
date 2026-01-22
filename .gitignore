@@ -1,5 +1,9 @@
+*.csv
+*.db
+
 !.gitignore
 !.gitmodules
 !Makefile
 !README.md
 !db.py
+!ctrl-gender.py
