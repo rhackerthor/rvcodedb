@@ -24,4 +24,9 @@ inst_db: inst_json
 chisel_test: inst_json
 	python3 db.py --input $(JSON) --output $(CHISEL_TEST) --extension $(EXTENSION)
 
+
+ctrl_genter: inst_json
+shell source myenv/bin/activate
+	python3 ctrl-gender.py
+
 .PHONY: all default inst_json inst_db chisel_test
