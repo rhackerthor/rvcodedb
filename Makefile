@@ -24,17 +24,17 @@ $(VENV)/bin/activate: requirements.txt
 	$(PYTHON) -m pip install --upgrade pip
 	$(PIP) install -r requirements.txt
 
-inst_json:
+inst-json:
 	echo "$(RISCV_OPCODES_PATH)"
 	$(MAKE) -C $(RISCV_OPCODES_PATH)
 
-inst_db: inst_json $(VENV)/bin/activate
+inst-db: inst_json $(VENV)/bin/activate
 	$(PYTHON) db.py --input $(JSON) --output $(TARGET) --extension $(EXTENSION)
 
-chisel_test: inst_json $(VENV)/bin/activate
+chisel-test: inst_json $(VENV)/bin/activate
 	$(PYTHON) db.py --input $(JSON) --output $(CHISEL_TEST) --extension $(EXTENSION)
 
-ctrl_genter: inst_json $(VENV)/bin/activate
+ctrl-gender: inst_json $(VENV)/bin/activate
 	$(PYTHON) ctrl-gender.py
 
 .PHONY: all default inst_json inst_db chisel_test
