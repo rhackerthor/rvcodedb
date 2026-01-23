@@ -10,7 +10,7 @@ import csv
 import shutil
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -63,11 +63,13 @@ class ControlSignal:
 
 class InstructionSelectDialog(QDialog):
     """指令选择对话框"""
-    def __init__(self, parent=None, instructions=None, selected_instructions=None, disabled_instructions=None):
+    def __init__(self, parent=None, instructions=None, selected_instructions=None, 
+                 disabled_instructions=None, value_mapping=None):
         super().__init__(parent)
         self.instructions = instructions or []
         self.selected_instructions = set(selected_instructions or [])
         self.disabled_instructions = set(disabled_instructions or [])
+        self.value_mapping = value_mapping or {}  # 值到指令的映射：{指令名: [值名1, 值名2, ...]}
         
         self.setWindowTitle("选择指令")
         self.setModal(True)
@@ -126,8 +128,9 @@ class InstructionSelectDialog(QDialog):
                 font-weight: bold;
             }
             QListWidget::item:disabled {
-                background-color: #f1f3f4;
+                background-color: #f8f9fa;
                 color: #95a5a6;
+                border-left: 4px solid #f39c12;
             }
             QPushButton {
                 background-color: #f8f9fa;
@@ -185,8 +188,9 @@ class InstructionSelectDialog(QDialog):
                 font-weight: bold;
             }
             QListWidget::item:disabled {
-                background-color: #4a4a4a;
+                background-color: #3c3c3c;
                 color: #777777;
+                border-left: 4px solid #ffa726;
             }
             QPushButton {
                 background-color: #3c3c3c;
@@ -223,9 +227,9 @@ class InstructionSelectDialog(QDialog):
             disabled_count = len(self.disabled_instructions)
             disabled_info = QLabel(f"⚠️ 有 {disabled_count} 条指令已被其他值使用，不可选择")
             if self.current_theme == "dark":
-                disabled_info.setStyleSheet("color: #ffa726; font-weight: bold;")
+                disabled_info.setStyleSheet("color: #ffa726; font-weight: bold; padding: 5px; border: 1px solid #ffa726; border-radius: 4px; background-color: #3c3c3c;")
             else:
-                disabled_info.setStyleSheet("color: #f39c12; font-weight: bold;")
+                disabled_info.setStyleSheet("color: #f39c12; font-weight: bold; padding: 5px; border: 1px solid #f39c12; border-radius: 4px; background-color: #f8f9fa;")
             layout.addWidget(disabled_info)
         
         # 指令列表
@@ -272,22 +276,41 @@ class InstructionSelectDialog(QDialog):
                 args_str = " ".join(inst.args)
                 display_text += f"\n参数: {args_str}"
             
+            # 如果指令被禁用，添加绑定信息
+            if inst.name in self.disabled_instructions:
+                if inst.name in self.value_mapping:
+                    bound_values = self.value_mapping[inst.name]
+                    if bound_values:
+                        bound_text = "、".join(bound_values[:3])  # 最多显示3个值
+                        if len(bound_values) > 3:
+                            bound_text += f" 等{len(bound_values)}个值"
+                        display_text += f"\n🔒 已绑定到: {bound_text}"
+            
             item = QListWidgetItem(display_text)
             item.setData(Qt.ItemDataRole.UserRole, inst.name)
             
             # 设置工具提示
             tooltip = f"指令: {inst.name}\n指令集: {inst.extension}\n编码: {inst.encode}\n参数: {' '.join(inst.args)}"
             if inst.name in self.disabled_instructions:
-                tooltip += "\n\n❌ 此指令已被其他值使用"
+                if inst.name in self.value_mapping:
+                    bound_values = self.value_mapping[inst.name]
+                    if bound_values:
+                        tooltip += f"\n\n❌ 此指令已绑定到以下值:\n"
+                        for value_name in bound_values:
+                            tooltip += f"  • {value_name}\n"
+                    else:
+                        tooltip += f"\n\n❌ 此指令已被其他值使用"
             item.setToolTip(tooltip)
             
             # 禁用已被其他值使用的指令
             if inst.name in self.disabled_instructions:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
                 if self.current_theme == "dark":
-                    item.setBackground(QColor("#4a4a4a"))
+                    item.setBackground(QColor("#3c3c3c"))
+                    item.setForeground(QColor("#777777"))
                 else:
-                    item.setBackground(QColor("#f1f3f4"))
+                    item.setBackground(QColor("#f8f9fa"))
+                    item.setForeground(QColor("#95a5a6"))
             
             self.list_widget.addItem(item)
             
@@ -335,6 +358,7 @@ class ValueConfigWidget(QFrame):
         self.instructions = instructions or []
         self.selected_instructions = []
         self.get_disabled_instructions_func = None  # 用于获取其他值已选指令的函数
+        self.get_value_mapping_func = None  # 用于获取指令到值的映射函数
         
         self.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
         self.setLineWidth(2)
@@ -348,6 +372,10 @@ class ValueConfigWidget(QFrame):
     def set_get_disabled_instructions_func(self, func):
         """设置获取其他值已选指令的函数"""
         self.get_disabled_instructions_func = func
+    
+    def set_get_value_mapping_func(self, func):
+        """设置获取指令到值映射的函数"""
+        self.get_value_mapping_func = func
     
     def init_ui(self, value_name):
         layout = QVBoxLayout()
@@ -424,6 +452,11 @@ class ValueConfigWidget(QFrame):
         if self.get_disabled_instructions_func:
             disabled_instructions = self.get_disabled_instructions_func()
         
+        # 获取指令到值的映射
+        value_mapping = {}
+        if self.get_value_mapping_func:
+            value_mapping = self.get_value_mapping_func()
+        
         # 过滤当前已选指令，移除已被其他值选中的指令
         filtered_selected = [inst for inst in self.selected_instructions 
                            if inst not in disabled_instructions]
@@ -438,7 +471,8 @@ class ValueConfigWidget(QFrame):
             self,
             self.instructions,
             self.selected_instructions,
-            disabled_instructions
+            disabled_instructions,
+            value_mapping
         )
         
         if dialog.exec():
@@ -447,14 +481,29 @@ class ValueConfigWidget(QFrame):
             # 检查是否有指令冲突
             conflict_instructions = set(new_selected) & disabled_instructions
             if conflict_instructions:
-                conflict_list = ", ".join(sorted(conflict_instructions)[:3])
-                if len(conflict_instructions) > 3:
-                    conflict_list += f" 等 {len(conflict_instructions)} 条指令"
+                # 获取冲突指令的绑定信息
+                conflict_info = []
+                for inst in conflict_instructions:
+                    if inst in value_mapping:
+                        bound_values = value_mapping[inst]
+                        if bound_values:
+                            bound_text = ", ".join(bound_values[:3])
+                            if len(bound_values) > 3:
+                                bound_text += f" 等{len(bound_values)}个值"
+                            conflict_info.append(f"{inst} (已绑定到: {bound_text})")
+                        else:
+                            conflict_info.append(inst)
+                    else:
+                        conflict_info.append(inst)
+                
+                conflict_list = "\n".join(conflict_info[:3])
+                if len(conflict_info) > 3:
+                    conflict_list += f"\n... 等 {len(conflict_info)} 条指令"
                 
                 reply = QMessageBox.question(
                     self,
                     "指令冲突",
-                    f"以下指令已被其他值使用:\n{conflict_list}\n\n是否要移除这些指令？",
+                    f"以下指令已被其他值使用:\n\n{conflict_list}\n\n是否要移除这些指令？",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 
@@ -2560,6 +2609,9 @@ class MainWindow(QMainWindow):
         # 设置获取禁用指令的函数
         widget.set_get_disabled_instructions_func(lambda: self.get_disabled_instructions_for_widget(widget))
         
+        # 设置获取指令到值映射的函数
+        widget.set_get_value_mapping_func(lambda: self.get_value_mapping_for_widget(widget))
+        
         self.value_container_layout.addWidget(widget)
         self.value_widgets.append(widget)
         
@@ -2574,11 +2626,27 @@ class MainWindow(QMainWindow):
                 disabled.update(widget.selected_instructions)
         return disabled
     
+    def get_value_mapping_for_widget(self, current_widget):
+        """获取指令到值的映射（除了指定部件外）"""
+        value_mapping = {}  # {指令名: [值名1, 值名2, ...]}
+        
+        for widget in self.value_widgets:
+            if widget is not current_widget:
+                value_name = widget.name_edit.text().strip()
+                if value_name and widget.selected_instructions:
+                    for inst in widget.selected_instructions:
+                        if inst not in value_mapping:
+                            value_mapping[inst] = []
+                        value_mapping[inst].append(value_name)
+        
+        return value_mapping
+    
     def on_config_changed(self):
         """配置变化时的处理"""
-        # 更新所有值部件的禁用指令函数
+        # 更新所有值部件的禁用指令函数和值映射函数
         for widget in self.value_widgets:
             widget.set_get_disabled_instructions_func(lambda w=widget: self.get_disabled_instructions_for_widget(w))
+            widget.set_get_value_mapping_func(lambda w=widget: self.get_value_mapping_for_widget(w))
     
     def remove_last_value_widget(self):
         """删除最后一个值配置部件"""
@@ -2631,6 +2699,9 @@ class MainWindow(QMainWindow):
             
             # 设置获取禁用指令的函数
             widget.set_get_disabled_instructions_func(lambda w=widget: self.get_disabled_instructions_for_widget(w))
+            
+            # 设置获取指令到值映射的函数
+            widget.set_get_value_mapping_func(lambda w=widget: self.get_value_mapping_for_widget(w))
             
             self.value_container_layout.addWidget(widget)
             self.value_widgets.append(widget)
