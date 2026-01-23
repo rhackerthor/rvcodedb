@@ -546,7 +546,7 @@ class ValueConfigWidget(QFrame):
     def is_valid(self):
         """检查是否有效"""
         name = self.name_edit.text().strip()
-        return bool(name and self.selected_instructions)
+        return bool(name)  # 修改为：只要名称不为空就有效，允许没有指令
 
 class TemplateManagerDialog(QDialog):
     """模板管理对话框"""
@@ -556,20 +556,26 @@ class TemplateManagerDialog(QDialog):
         
         self.setWindowTitle("Chisel代码模板管理")
         self.setModal(True)
-        self.resize(850, 650)
+        self.resize(900, 700)
         
         # 加载当前主题
         self.current_theme = self.settings.value("current_theme", "light", type=str)
         
         self.init_ui()
-        self.load_template()
+        self.load_templates()
     
     def init_ui(self):
         layout = QVBoxLayout()
         
-        # 模板描述
-        desc_label = QLabel(
-            "📝 在这里可以自定义生成的Chisel代码框架。\n"
+        # 创建标签页
+        self.tab_widget = QTabWidget()
+        
+        # Ctrl模板标签页
+        ctrl_tab = QWidget()
+        ctrl_layout = QVBoxLayout()
+        
+        ctrl_desc_label = QLabel(
+            "📝 Ctrl模板 - 控制信号枚举类模板\n"
             "使用以下占位符：\n"
             "  {signal_name} - 信号名称\n"
             "  {encoding_type} - 编码类型\n"
@@ -578,34 +584,77 @@ class TemplateManagerDialog(QDialog):
             "  {signal_width} - 信号宽度\n"
             "  {generation_time} - 生成时间"
         )
-        desc_label.setStyleSheet(self.get_desc_style())
-        layout.addWidget(desc_label)
+        ctrl_desc_label.setStyleSheet(self.get_desc_style())
+        ctrl_layout.addWidget(ctrl_desc_label)
         
-        # 模板编辑器
-        self.template_edit = QPlainTextEdit()
-        self.template_edit.setFont(QFont("Monospace", 11))
-        self.template_edit.setPlaceholderText("在此输入Chisel代码模板...")
-        layout.addWidget(self.template_edit)
+        self.ctrl_template_edit = QPlainTextEdit()
+        self.ctrl_template_edit.setFont(QFont("Monospace", 11))
+        self.ctrl_template_edit.setPlaceholderText("在此输入Ctrl类代码模板...")
+        ctrl_layout.addWidget(self.ctrl_template_edit)
+        
+        # Ctrl模板按钮
+        ctrl_btn_layout = QHBoxLayout()
+        ctrl_default_btn = QPushButton("🔄 加载默认Ctrl模板")
+        ctrl_default_btn.clicked.connect(self.load_default_ctrl_template)
+        ctrl_btn_layout.addWidget(ctrl_default_btn)
+        
+        ctrl_save_btn = QPushButton("💾 保存Ctrl模板")
+        ctrl_save_btn.clicked.connect(self.save_ctrl_template)
+        ctrl_btn_layout.addWidget(ctrl_save_btn)
+        
+        ctrl_layout.addLayout(ctrl_btn_layout)
+        ctrl_tab.setLayout(ctrl_layout)
+        
+        # Field模板标签页
+        field_tab = QWidget()
+        field_layout = QVBoxLayout()
+        
+        field_desc_label = QLabel(
+            "📝 Field模板 - 解码字段类模板\n"
+            "使用以下占位符：\n"
+            "  {signal_name} - 信号名称\n"
+            "  {encoding_type} - 编码类型\n"
+            "  {signal_width} - 信号宽度\n"
+            "  {values_list} - 值列表\n"
+            "  {value_mappings} - 值映射列表\n"
+            "  {generation_time} - 生成时间"
+        )
+        field_desc_label.setStyleSheet(self.get_desc_style())
+        field_layout.addWidget(field_desc_label)
+        
+        self.field_template_edit = QPlainTextEdit()
+        self.field_template_edit.setFont(QFont("Monospace", 11))
+        self.field_template_edit.setPlaceholderText("在此输入Field类代码模板...")
+        field_layout.addWidget(self.field_template_edit)
+        
+        # Field模板按钮
+        field_btn_layout = QHBoxLayout()
+        field_default_btn = QPushButton("🔄 加载默认Field模板")
+        field_default_btn.clicked.connect(self.load_default_field_template)
+        field_btn_layout.addWidget(field_default_btn)
+        
+        field_save_btn = QPushButton("💾 保存Field模板")
+        field_save_btn.clicked.connect(self.save_field_template)
+        field_btn_layout.addWidget(field_save_btn)
+        
+        field_layout.addLayout(field_btn_layout)
+        field_tab.setLayout(field_layout)
+        
+        # 添加标签页
+        self.tab_widget.addTab(ctrl_tab, "Ctrl模板")
+        self.tab_widget.addTab(field_tab, "Field模板")
+        
+        layout.addWidget(self.tab_widget)
         
         # 按钮区域
         button_layout = QHBoxLayout()
         
-        # 加载默认模板
-        default_btn = QPushButton("🔄 加载默认模板")
-        default_btn.clicked.connect(self.load_default_template)
-        button_layout.addWidget(default_btn)
-        
         # 示例按钮
         example_btn = QPushButton("📋 加载示例模板")
-        example_btn.clicked.connect(self.load_example_template)
+        example_btn.clicked.connect(self.load_example_templates)
         button_layout.addWidget(example_btn)
         
         button_layout.addStretch()
-        
-        # 保存按钮
-        save_btn = QPushButton("💾 保存模板")
-        save_btn.clicked.connect(self.save_template)
-        button_layout.addWidget(save_btn)
         
         # 应用按钮
         apply_btn = QPushButton("✅ 应用并关闭")
@@ -643,32 +692,25 @@ class TemplateManagerDialog(QDialog):
                 font-size: 13px;
             """
     
-    def load_template(self):
+    def load_templates(self):
         """加载模板"""
-        template = self.settings.value("chisel_template", "")
-        if not template:
-            self.load_default_template()
+        # 加载Ctrl模板
+        ctrl_template = self.settings.value("chisel_ctrl_template", "")
+        if not ctrl_template:
+            self.load_default_ctrl_template()
         else:
-            self.template_edit.setPlainText(template)
+            self.ctrl_template_edit.setPlainText(ctrl_template)
+        
+        # 加载Field模板
+        field_template = self.settings.value("chisel_field_template", "")
+        if not field_template:
+            self.load_default_field_template()
+        else:
+            self.field_template_edit.setPlainText(field_template)
     
-    def load_default_template(self):
-        """加载默认模板"""
-        default_template = """package rv.util.decoder.ctrl
-
-import chisel3._
-import chisel3.util._
-import rv.util.CtrlEnum
-
-object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
-{values_list}
-{methods_list}
-}"""
-        self.template_edit.setPlainText(default_template)
-        QMessageBox.information(self, "提示", "已加载默认模板")
-    
-    def load_example_template(self):
-        """加载示例模板"""
-        example_template = """// ===========================================
+    def load_default_ctrl_template(self):
+        """加载默认Ctrl模板"""
+        default_ctrl_template = """// ===========================================
 // 自动生成的Chisel控制信号枚举类
 // 生成时间: {generation_time}
 // ===========================================
@@ -696,24 +738,143 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
   
   def getWidth: Int = this.getWidth
 }"""
-        self.template_edit.setPlainText(example_template)
+        self.ctrl_template_edit.setPlainText(default_ctrl_template)
+    
+    def load_default_field_template(self):
+        """加载默认Field模板"""
+        default_field_template = """package rv.util.decoder.filed
+
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.decode._
+
+import rv.util.decoder.InstructionPattern
+import rv.util.decoder.ctrl.{signal_name}
+
+object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
+  override def name: String = "{signal_name}Field"
+  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  private def map: Seq[(Seq[String], UInt)] = Seq(
+{value_mappings}
+  )
+  override def genTable(op: InstructionPattern): BitPat = {
+    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+  }
+}"""
+        self.field_template_edit.setPlainText(default_field_template)
+    
+    def load_example_templates(self):
+        """加载示例模板"""
+        # 加载示例Ctrl模板
+        example_ctrl_template = """// ===========================================
+// 自动生成的Chisel控制信号枚举类
+// 生成时间: {generation_time}
+// ===========================================
+
+package rv.util.decoder.ctrl
+
+import chisel3._
+import chisel3.util._
+import rv.util.CtrlEnum
+
+/**
+  * {signal_name} - 控制信号枚举类
+  * 编码类型: {encoding_type}
+  * 信号宽度: {signal_width} bits
+  */
+object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+  // 值定义
+{values_list}
+  
+  // 指令分类方法
+{methods_list}
+  
+  // 辅助方法
+  def getAllValues: Seq[UInt] = this.Values
+  
+  def getWidth: Int = this.getWidth
+  
+  // 默认值
+  def default: UInt = this.Values.head
+  
+  // 值到索引的映射
+  def valueToIndex(value: UInt): Int = {
+    this.Values.indexWhere(_ === value)
+  }
+}"""
+        self.ctrl_template_edit.setPlainText(example_ctrl_template)
+        
+        # 加载示例Field模板
+        example_field_template = """// ===========================================
+// 自动生成的Chisel解码字段类
+// 生成时间: {generation_time}
+// ===========================================
+
+package rv.util.decoder.filed
+
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.decode._
+
+import rv.util.decoder.InstructionPattern
+import rv.util.decoder.ctrl.{signal_name}
+
+/**
+  * {signal_name}Field - 解码字段类
+  * 信号宽度: {signal_width} bits
+  */
+object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
+  override def name: String = "{signal_name}Field"
+  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  
+  // 指令到值的映射表
+  private def map: Seq[(Seq[String], UInt)] = Seq(
+{value_mappings}
+  )
+  
+  override def genTable(op: InstructionPattern): BitPat = {
+    // 使用名称匹配生成对应的值
+    BitPat(op.nameMatch(map, {signal_name}.default))
+  }
+  
+  // 辅助方法：获取所有可能的映射
+  def getAllMappings: Seq[(Seq[String], UInt)] = map
+}"""
+        self.field_template_edit.setPlainText(example_field_template)
+        
         QMessageBox.information(self, "提示", "已加载示例模板")
     
-    def save_template(self):
-        """保存模板"""
-        template = self.template_edit.toPlainText()
-        self.settings.setValue("chisel_template", template)
+    def save_ctrl_template(self):
+        """保存Ctrl模板"""
+        template = self.ctrl_template_edit.toPlainText()
+        self.settings.setValue("chisel_ctrl_template", template)
         self.settings.sync()
-        QMessageBox.information(self, "成功", "模板已保存！")
+        QMessageBox.information(self, "成功", "Ctrl模板已保存！")
+    
+    def save_field_template(self):
+        """保存Field模板"""
+        template = self.field_template_edit.toPlainText()
+        self.settings.setValue("chisel_field_template", template)
+        self.settings.sync()
+        QMessageBox.information(self, "成功", "Field模板已保存！")
+    
+    def save_templates(self):
+        """保存所有模板"""
+        self.save_ctrl_template()
+        self.save_field_template()
     
     def apply_and_close(self):
         """应用并关闭"""
-        self.save_template()
+        self.save_templates()
         self.accept()
     
-    def get_template(self):
-        """获取当前模板"""
-        return self.template_edit.toPlainText()
+    def get_ctrl_template(self):
+        """获取Ctrl模板"""
+        return self.ctrl_template_edit.toPlainText()
+    
+    def get_field_template(self):
+        """获取Field模板"""
+        return self.field_template_edit.toPlainText()
 
 class SettingsDialog(QDialog):
     """设置对话框"""
@@ -723,7 +884,7 @@ class SettingsDialog(QDialog):
         
         self.setWindowTitle("设置")
         self.setModal(True)
-        self.resize(550, 450)
+        self.resize(600, 500)
         
         # 加载当前主题
         self.current_theme = self.settings.value("current_theme", "light", type=str)
@@ -748,14 +909,23 @@ class SettingsDialog(QDialog):
         csv_layout.addWidget(csv_btn)
         path_layout.addRow("📄 默认CSV文件:", csv_layout)
         
-        # Scala文件保存路径
-        scala_layout = QHBoxLayout()
-        self.scala_edit = QLineEdit()
-        scala_layout.addWidget(self.scala_edit)
-        scala_btn = QPushButton("📂 浏览...")
-        scala_btn.clicked.connect(self.browse_scala)
-        scala_layout.addWidget(scala_btn)
-        path_layout.addRow("💾 Scala保存路径:", scala_layout)
+        # Ctrl文件保存路径
+        ctrl_layout = QHBoxLayout()
+        self.ctrl_edit = QLineEdit()
+        ctrl_layout.addWidget(self.ctrl_edit)
+        ctrl_btn = QPushButton("📂 浏览...")
+        ctrl_btn.clicked.connect(lambda: self.browse_directory("ctrl"))
+        ctrl_layout.addWidget(ctrl_btn)
+        path_layout.addRow("💾 Ctrl保存路径:", ctrl_layout)
+        
+        # Field文件保存路径
+        field_layout = QHBoxLayout()
+        self.field_edit = QLineEdit()
+        field_layout.addWidget(self.field_edit)
+        field_btn = QPushButton("📂 浏览...")
+        field_btn.clicked.connect(lambda: self.browse_directory("field"))
+        field_layout.addWidget(field_btn)
+        path_layout.addRow("💾 Field保存路径:", field_layout)
         
         path_group.setLayout(path_layout)
         layout.addWidget(path_group)
@@ -775,6 +945,13 @@ class SettingsDialog(QDialog):
         self.auto_format_check = QCheckBox("自动格式化生成的代码")
         self.auto_format_check.setStyleSheet(self.get_checkbox_style())
         code_layout.addWidget(self.auto_format_check)
+        
+        # 自动生成Field文件
+        self.auto_field_check = QCheckBox("自动生成Field文件")
+        self.auto_field_check.setStyleSheet(self.get_checkbox_style())
+        self.auto_field_check.setChecked(True)
+        self.auto_field_check.setToolTip("生成Ctrl文件时自动生成对应的Field文件")
+        code_layout.addWidget(self.auto_field_check)
         
         code_group.setLayout(code_layout)
         layout.addWidget(code_group)
@@ -865,15 +1042,23 @@ class SettingsDialog(QDialog):
         if file_path:
             self.csv_edit.setText(file_path)
     
-    def browse_scala(self):
-        """浏览Scala保存路径"""
+    def browse_directory(self, dir_type):
+        """浏览目录"""
+        if dir_type == "ctrl":
+            current_path = self.ctrl_edit.text()
+        else:
+            current_path = self.field_edit.text()
+            
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "选择Scala保存路径",
-            self.scala_edit.text()
+            f"选择{dir_type.upper()}保存路径",
+            current_path
         )
         if dir_path:
-            self.scala_edit.setText(dir_path)
+            if dir_type == "ctrl":
+                self.ctrl_edit.setText(dir_path)
+            else:
+                self.field_edit.setText(dir_path)
     
     def manage_templates(self):
         """管理代码模板"""
@@ -883,18 +1068,33 @@ class SettingsDialog(QDialog):
     def load_settings(self):
         """加载设置"""
         self.csv_edit.setText(self.settings.value("default_csv", ""))
-        self.scala_edit.setText(self.settings.value("scala_save_path", str(Path.home() / "riscv_scala")))
+        
+        # Ctrl文件保存路径
+        ctrl_path = self.settings.value("ctrl_save_path", "")
+        if not ctrl_path:
+            ctrl_path = str(Path.home() / "riscv-scala" / "ctrl")
+        self.ctrl_edit.setText(ctrl_path)
+        
+        # Field文件保存路径
+        field_path = self.settings.value("field_save_path", "")
+        if not field_path:
+            field_path = str(Path.home() / "riscv-scala" / "field")
+        self.field_edit.setText(field_path)
+        
         self.auto_save_check.setChecked(self.settings.value("auto_save", True, type=bool))
         self.auto_load_check.setChecked(self.settings.value("auto_load", True, type=bool))
         self.auto_format_check.setChecked(self.settings.value("auto_format", True, type=bool))
+        self.auto_field_check.setChecked(self.settings.value("auto_field", True, type=bool))
     
     def save_settings(self):
         """保存设置"""
         self.settings.setValue("default_csv", self.csv_edit.text())
-        self.settings.setValue("scala_save_path", self.scala_edit.text())
+        self.settings.setValue("ctrl_save_path", self.ctrl_edit.text())
+        self.settings.setValue("field_save_path", self.field_edit.text())
         self.settings.setValue("auto_save", self.auto_save_check.isChecked())
         self.settings.setValue("auto_load", self.auto_load_check.isChecked())
         self.settings.setValue("auto_format", self.auto_format_check.isChecked())
+        self.settings.setValue("auto_field", self.auto_field_check.isChecked())
         self.settings.sync()
     
     def apply_settings(self):
@@ -1368,27 +1568,45 @@ class RISCVCtrlGenerator:
             print(f"删除记录失败: {e}")
             return False
     
-    def generate_chisel_code(self, signal: Dict[str, Any]) -> str:
-        """生成Chisel代码，使用自定义模板"""
+    def generate_ctrl_code(self, signal: Dict[str, Any]) -> str:
+        """生成Ctrl类代码，使用自定义模板"""
         name = signal['name']
         encoding_type = signal['encoding_type']
         values = signal['values']
         width = signal['width']
         
         # 获取自定义模板
-        template = self.settings.value("chisel_template", "")
+        template = self.settings.value("chisel_ctrl_template", "")
         
         # 如果没有自定义模板，使用默认模板
         if not template:
-            template = """package rv.util.decoder.ctrl
+            template = """// ===========================================
+// 自动生成的Chisel控制信号枚举类
+// 生成时间: {generation_time}
+// ===========================================
+
+package rv.util.decoder.ctrl
 
 import chisel3._
 import chisel3.util._
 import rv.util.CtrlEnum
 
+/**
+  * {signal_name} - 控制信号枚举类
+  * 编码类型: {encoding_type}
+  * 信号宽度: {signal_width} bits
+  */
 object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+  // 值定义
 {values_list}
+  
+  // 指令分类方法
 {methods_list}
+  
+  // 辅助方法
+  def getAllValues: Seq[UInt] = this.Values
+  
+  def getWidth: Int = this.getWidth
 }"""
         
         # 生成值列表
@@ -1396,7 +1614,7 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         for value_name in values.keys():
             values_list += f"  val {value_name} = Value\n"
         
-        # 生成方法列表
+        # 生成方法列表 - 即使没有指令也生成方法
         methods_list = ""
         for value_name, inst_list in values.items():
             if inst_list:
@@ -1414,6 +1632,9 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
                 methods_list += f"  def is{value_name}: Seq[String] = Seq(\n"
                 methods_list += f"{inst_str}\n"
                 methods_list += "  )\n\n"
+            else:
+                # 没有指令的情况，返回空序列
+                methods_list += f"  def is{value_name}: Seq[String] = Seq()\n\n"
         
         # 替换模板中的占位符
         code = template.replace('{signal_name}', name)
@@ -1428,6 +1649,87 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
             code = self.format_code(code)
         
         return code
+    
+    def generate_field_code(self, signal: Dict[str, Any]) -> str:
+        """生成Field类代码，使用自定义模板"""
+        name = signal['name']
+        encoding_type = signal['encoding_type']
+        values = signal['values']
+        width = signal['width']
+        
+        # 获取自定义模板
+        template = self.settings.value("chisel_field_template", "")
+        
+        # 如果没有自定义模板，使用默认模板
+        if not template:
+            template = """package rv.util.decoder.filed
+
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.decode._
+
+import rv.util.decoder.InstructionPattern
+import rv.util.decoder.ctrl.{signal_name}
+
+object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
+  override def name: String = "{signal_name}Field"
+  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  private def map: Seq[(Seq[String], UInt)] = Seq(
+{value_mappings}
+  )
+  override def genTable(op: InstructionPattern): BitPat = {
+    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+  }
+}"""
+        
+        # 生成值映射列表
+        value_mappings = ""
+        for i, (value_name, inst_list) in enumerate(values.items()):
+            if inst_list:
+                # 每行显示5个指令
+                inst_str_parts = []
+                for j in range(0, len(inst_list), 5):
+                    line_insts = inst_list[j:j+5]
+                    inst_str = ', '.join(f'"{inst}"' for inst in line_insts)
+                    if j == 0:
+                        inst_str_parts.append(f"    {inst_str}")
+                    else:
+                        inst_str_parts.append(f"    {inst_str}")
+                
+                inst_str = ',\n'.join(inst_str_parts)
+                value_mappings += f"    {name}.is{value_name} -> {name}.Values({name}.{value_name})"
+            else:
+                # 没有指令的情况，使用空序列
+                value_mappings += f"    Seq() -> {name}.Values({name}.{value_name})"
+            
+            # 如果不是最后一个，添加逗号
+            if i < len(values) - 1:
+                value_mappings += ",\n"
+        
+        # 替换模板中的占位符
+        code = template.replace('{signal_name}', name)
+        code = code.replace('{encoding_type}', encoding_type)
+        code = code.replace('{signal_width}', str(width))
+        code = code.replace('{value_mappings}', value_mappings)
+        code = code.replace('{generation_time}', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        # 如果启用了自动格式化，格式化代码
+        if self.settings.value("auto_format", True, type=bool):
+            code = self.format_code(code)
+        
+        return code
+    
+    def generate_chisel_code(self, signal: Dict[str, Any]) -> Tuple[str, str]:
+        """生成Chisel代码，返回(ctrl_code, field_code)"""
+        ctrl_code = self.generate_ctrl_code(signal)
+        
+        # 检查是否自动生成Field文件
+        if self.settings.value("auto_field", True, type=bool):
+            field_code = self.generate_field_code(signal)
+        else:
+            field_code = ""
+            
+        return ctrl_code, field_code
     
     def format_code(self, code: str) -> str:
         """格式化代码（简单的格式化）"""
@@ -1454,14 +1756,16 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         
         return '\n'.join(formatted_lines)
     
-    def save_scala_file(self, code: str, signal_name: str = None) -> str:
-        """保存Scala文件，文件名与类名相同"""
-        save_path = self.settings.value("scala_save_path", str(Path.home() / "riscv_scala"))
+    def save_ctrl_file(self, code: str, signal_name: str = None) -> str:
+        """保存Ctrl文件"""
+        save_path = self.settings.value("ctrl_save_path", str(Path.home() / "riscv-scala" / "ctrl"))
         
         # 确保目录存在
         try:
+            print("hello\n")
             os.makedirs(save_path, exist_ok=True)
         except PermissionError:
+            print("hello\n")
             raise PermissionError(f"没有权限创建目录: {save_path}")
         
         # 提取类名
@@ -1502,6 +1806,68 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
             f.write(code)
         
         return file_path
+    
+    def save_field_file(self, code: str, signal_name: str = None) -> str:
+        """保存Field文件"""
+        if not code:  # 如果没有生成field代码
+            return ""
+            
+        save_path = self.settings.value("field_save_path", str(Path.home() / "riscv-scala" / "field"))
+        
+        # 确保目录存在
+        try:
+            os.makedirs(save_path, exist_ok=True)
+        except PermissionError:
+            raise PermissionError(f"没有权限创建目录: {save_path}")
+        
+        # 提取类名
+        if signal_name:
+            class_name = signal_name
+        else:
+            # 从代码中提取类名
+            lines = code.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('object '):
+                    # 提取 object 名称
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        name = parts[1]
+                        # 移除可能的后缀
+                        if 'extends' in name:
+                            name = name.split('extends')[0].strip()
+                        if '(' in name:
+                            name = name.split('(')[0].strip()
+                        class_name = name.strip()
+                        break
+            else:
+                # 如果没有找到object定义，使用默认名称
+                class_name = "ControlSignalField"
+        
+        # 生成文件名
+        file_path = os.path.join(save_path, f"{class_name}.scala")
+        
+        # 如果文件已存在，添加序号
+        counter = 1
+        while os.path.exists(file_path):
+            file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
+            counter += 1
+        
+        # 保存文件
+        with open(file_path, 'w') as f:
+            f.write(code)
+        
+        return file_path
+    
+    def save_scala_files(self, ctrl_code: str, field_code: str, signal_name: str = None) -> Tuple[str, str]:
+        """保存Scala文件，返回(ctrl_file_path, field_file_path)"""
+        ctrl_file_path = self.save_ctrl_file(ctrl_code, signal_name)
+        
+        field_file_path = ""
+        if field_code:
+            field_file_path = self.save_field_file(field_code, signal_name)
+        
+        return ctrl_file_path, field_file_path
 
 class MainWindow(QMainWindow):
     """主窗口"""
@@ -2431,7 +2797,7 @@ class MainWindow(QMainWindow):
         else:
             name_label.setStyleSheet("color: #2c3e50; font-weight: bold;")
         self.signal_name_edit = QLineEdit()
-        self.signal_name_edit.setText("InstType")
+        self.signal_name_edit.setText("InstTypeCtrl")
         basic_layout.addRow(name_label, self.signal_name_edit)
         
         # 编码类型
@@ -2515,16 +2881,44 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout()
         
-        # 标题
-        title = QLabel("📄 代码预览")
-        title.setProperty("title", True)
-        layout.addWidget(title)
+        # 创建标签页
+        self.code_tab_widget = QTabWidget()
         
-        # 代码编辑器
-        self.code_editor = QTextEdit()
-        self.code_editor.setFont(QFont("Monospace", 11))
-        self.code_editor.setReadOnly(True)
-        layout.addWidget(self.code_editor, 1)
+        # Ctrl代码标签页
+        ctrl_tab = QWidget()
+        ctrl_layout = QVBoxLayout()
+        
+        ctrl_title = QLabel("📄 Ctrl代码预览")
+        ctrl_title.setProperty("title", True)
+        ctrl_layout.addWidget(ctrl_title)
+        
+        self.ctrl_code_editor = QTextEdit()
+        self.ctrl_code_editor.setFont(QFont("Monospace", 11))
+        self.ctrl_code_editor.setReadOnly(True)
+        ctrl_layout.addWidget(self.ctrl_code_editor, 1)
+        
+        ctrl_tab.setLayout(ctrl_layout)
+        
+        # Field代码标签页
+        field_tab = QWidget()
+        field_layout = QVBoxLayout()
+        
+        field_title = QLabel("📄 Field代码预览")
+        field_title.setProperty("title", True)
+        field_layout.addWidget(field_title)
+        
+        self.field_code_editor = QTextEdit()
+        self.field_code_editor.setFont(QFont("Monospace", 11))
+        self.field_code_editor.setReadOnly(True)
+        field_layout.addWidget(self.field_code_editor, 1)
+        
+        field_tab.setLayout(field_layout)
+        
+        # 添加标签页
+        self.code_tab_widget.addTab(ctrl_tab, "Ctrl代码")
+        self.code_tab_widget.addTab(field_tab, "Field代码")
+        
+        layout.addWidget(self.code_tab_widget, 1)
         
         # 按钮
         btn_layout = QHBoxLayout()
@@ -2533,8 +2927,8 @@ class MainWindow(QMainWindow):
         copy_btn.clicked.connect(self.copy_code)
         btn_layout.addWidget(copy_btn)
         
-        save_btn = QPushButton("💾 保存到文件")
-        save_btn.clicked.connect(self.save_code_file)
+        save_btn = QPushButton("💾 保存所有文件")
+        save_btn.clicked.connect(self.save_all_files)
         btn_layout.addWidget(save_btn)
         
         # 模板预览按钮
@@ -2751,7 +3145,8 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("🗑️ 已清空所有值定义")
             
             # 清空代码预览
-            self.code_editor.clear()
+            self.ctrl_code_editor.clear()
+            self.field_code_editor.clear()
             
             # 触发配置变化
             self.on_config_changed()
@@ -2806,8 +3201,9 @@ class MainWindow(QMainWindow):
             self.value_hint_label.show()
         
         # 生成并显示代码
-        code = self.generator.generate_chisel_code(record)
-        self.code_editor.setPlainText(code)
+        ctrl_code, field_code = self.generator.generate_chisel_code(record)
+        self.ctrl_code_editor.setPlainText(ctrl_code)
+        self.field_code_editor.setPlainText(field_code)
         
         self.status_bar.showMessage(f"✅ 已加载记录: {record['name']}")
     
@@ -2840,8 +3236,9 @@ class MainWindow(QMainWindow):
             else:
                 invalid_widgets.append(i + 1)
         
+        # 修改：允许值为空，只要名称不为空就接受
         if not value_mapping:
-            QMessageBox.warning(self, "警告", "请至少配置一个有效的值！")
+            QMessageBox.warning(self, "警告", "请至少配置一个值！")
             return
         
         # 检查是否有指令重复
@@ -2877,10 +3274,11 @@ class MainWindow(QMainWindow):
             )
             
             # 生成代码
-            code = self.generator.generate_chisel_code(signal)
+            ctrl_code, field_code = self.generator.generate_chisel_code(signal)
             
             # 显示代码
-            self.code_editor.setPlainText(code)
+            self.ctrl_code_editor.setPlainText(ctrl_code)
+            self.field_code_editor.setPlainText(field_code)
             
             # 更新状态
             self.status_bar.showMessage(
@@ -2891,39 +3289,56 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", f"生成代码失败:\n{str(e)}")
     
     def copy_code(self):
-        """复制代码到剪贴板"""
-        code = self.code_editor.toPlainText()
+        """复制当前标签页的代码到剪贴板"""
+        current_index = self.code_tab_widget.currentIndex()
+        
+        if current_index == 0:  # Ctrl代码标签页
+            code = self.ctrl_code_editor.toPlainText()
+            code_type = "Ctrl"
+        else:  # Field代码标签页
+            code = self.field_code_editor.toPlainText()
+            code_type = "Field"
+            
         if not code.strip():
-            QMessageBox.warning(self, "警告", "没有代码可复制！")
+            QMessageBox.warning(self, "警告", f"没有{code_type}代码可复制！")
             return
         
         clipboard = QApplication.clipboard()
         clipboard.setText(code)
         
-        self.status_bar.showMessage("✅ 代码已复制到剪贴板！")
+        self.status_bar.showMessage(f"✅ {code_type}代码已复制到剪贴板！")
     
-    def save_code_file(self):
-        """保存代码到文件，文件名与类名相同"""
-        code = self.code_editor.toPlainText()
-        if not code.strip():
-            QMessageBox.warning(self, "警告", "没有代码可保存！")
+    def save_all_files(self):
+        """保存所有代码到文件"""
+        ctrl_code = self.ctrl_code_editor.toPlainText()
+        if not ctrl_code.strip():
+            QMessageBox.warning(self, "警告", "没有Ctrl代码可保存！")
             return
         
         try:
-            # 使用生成器保存文件，传递信号名称
+            # 获取信号名称
             signal_name = self.signal_name_edit.text().strip()
             if not signal_name:
                 signal_name = None
-                
-            file_path = self.generator.save_scala_file(code, signal_name)
             
-            QMessageBox.information(
-                self,
-                "成功",
-                f"✅ 代码已保存到:\n{file_path}"
+            # 获取Field代码
+            field_code = self.field_code_editor.toPlainText()
+            
+            # 使用生成器保存文件
+            ctrl_file_path, field_file_path = self.generator.save_scala_files(
+                ctrl_code, field_code, signal_name
             )
             
-            self.status_bar.showMessage(f"✅ 文件已保存: {file_path}")
+            # 显示保存结果
+            message = f"✅ Ctrl文件已保存到:\n{ctrl_file_path}"
+            if field_file_path:
+                message += f"\n\n✅ Field文件已保存到:\n{field_file_path}"
+            else:
+                message += "\n\n⚠️ Field文件未生成（可能未启用自动生成Field文件）"
+            
+            QMessageBox.information(self, "成功", message)
+            
+            self.status_bar.showMessage(f"✅ 文件已保存: {ctrl_file_path}")
             
         except PermissionError as e:
             QMessageBox.critical(
@@ -2939,11 +3354,12 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self,
             "确认清空",
-            "确定要清空代码编辑器吗？"
+            "确定要清空所有代码编辑器吗？"
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            self.code_editor.clear()
+            self.ctrl_code_editor.clear()
+            self.field_code_editor.clear()
             self.status_bar.showMessage("🗑️ 代码编辑器已清空")
     
     def show_settings(self):
@@ -2959,18 +3375,58 @@ class MainWindow(QMainWindow):
     def show_template_preview(self):
         """显示当前模板预览"""
         settings = QSettings("rvctrl-gender", "settings")
-        template = settings.value("chisel_template", "")
+        ctrl_template = settings.value("chisel_ctrl_template", "")
+        field_template = settings.value("chisel_field_template", "")
         
-        if not template:
-            template = """package rv.util.decoder.ctrl
+        if not ctrl_template:
+            ctrl_template = """// ===========================================
+// 自动生成的Chisel控制信号枚举类
+// 生成时间: {generation_time}
+// ===========================================
+
+package rv.util.decoder.ctrl
 
 import chisel3._
 import chisel3.util._
 import rv.util.CtrlEnum
 
+/**
+  * {signal_name} - 控制信号枚举类
+  * 编码类型: {encoding_type}
+  * 信号宽度: {signal_width} bits
+  */
 object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+  // 值定义
 {values_list}
+  
+  // 指令分类方法
 {methods_list}
+  
+  // 辅助方法
+  def getAllValues: Seq[UInt] = this.Values
+  
+  def getWidth: Int = this.getWidth
+}"""
+        
+        if not field_template:
+            field_template = """package rv.util.decoder.filed
+
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.decode._
+
+import rv.util.decoder.InstructionPattern
+import rv.util.decoder.ctrl.{signal_name}
+
+object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
+  override def name: String = "{signal_name}Field"
+  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  private def map: Seq[(Seq[String], UInt)] = Seq(
+{value_mappings}
+  )
+  override def genTable(op: InstructionPattern): BitPat = {
+    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+  }
 }"""
         
         dialog = QDialog(self)
@@ -2983,16 +3439,22 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         
         layout = QVBoxLayout()
         
-        # 模板编辑器
-        template_edit = QPlainTextEdit()
-        template_edit.setFont(QFont("Monospace", 11))
-        template_edit.setPlainText(template)
-        template_edit.setReadOnly(True)
-        layout.addWidget(template_edit)
+        # 创建标签页
+        tab_widget = QTabWidget()
         
-        # 占位符说明
-        desc_label = QLabel(
-            "📝 可用占位符:\n"
+        # Ctrl模板标签页
+        ctrl_tab = QWidget()
+        ctrl_layout = QVBoxLayout()
+        
+        ctrl_template_edit = QPlainTextEdit()
+        ctrl_template_edit.setFont(QFont("Monospace", 11))
+        ctrl_template_edit.setPlainText(ctrl_template)
+        ctrl_template_edit.setReadOnly(True)
+        ctrl_layout.addWidget(ctrl_template_edit)
+        
+        # Ctrl占位符说明
+        ctrl_desc_label = QLabel(
+            "📝 Ctrl模板可用占位符:\n"
             "  {signal_name} - 信号名称\n"
             "  {encoding_type} - 编码类型\n"
             "  {values_list} - 值定义列表\n"
@@ -3001,7 +3463,7 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
             "  {generation_time} - 生成时间"
         )
         if current_theme == "dark":
-            desc_label.setStyleSheet("""
+            ctrl_desc_label.setStyleSheet("""
                 color: #e0e0e0; 
                 background-color: #3c3c3c; 
                 padding: 12px; 
@@ -3011,7 +3473,7 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
                 font-size: 13px;
             """)
         else:
-            desc_label.setStyleSheet("""
+            ctrl_desc_label.setStyleSheet("""
                 color: #2c3e50; 
                 background-color: #f8f9fa; 
                 padding: 12px; 
@@ -3020,7 +3482,59 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
                 font-weight: bold;
                 font-size: 13px;
             """)
-        layout.addWidget(desc_label)
+        ctrl_layout.addWidget(ctrl_desc_label)
+        
+        ctrl_tab.setLayout(ctrl_layout)
+        
+        # Field模板标签页
+        field_tab = QWidget()
+        field_layout = QVBoxLayout()
+        
+        field_template_edit = QPlainTextEdit()
+        field_template_edit.setFont(QFont("Monospace", 11))
+        field_template_edit.setPlainText(field_template)
+        field_template_edit.setReadOnly(True)
+        field_layout.addWidget(field_template_edit)
+        
+        # Field占位符说明
+        field_desc_label = QLabel(
+            "📝 Field模板可用占位符:\n"
+            "  {signal_name} - 信号名称\n"
+            "  {encoding_type} - 编码类型\n"
+            "  {signal_width} - 信号宽度\n"
+            "  {values_list} - 值列表\n"
+            "  {value_mappings} - 值映射列表\n"
+            "  {generation_time} - 生成时间"
+        )
+        if current_theme == "dark":
+            field_desc_label.setStyleSheet("""
+                color: #e0e0e0; 
+                background-color: #3c3c3c; 
+                padding: 12px; 
+                border-radius: 6px;
+                border: 2px solid #555555;
+                font-weight: bold;
+                font-size: 13px;
+            """)
+        else:
+            field_desc_label.setStyleSheet("""
+                color: #2c3e50; 
+                background-color: #f8f9fa; 
+                padding: 12px; 
+                border-radius: 6px;
+                border: 2px solid #dee2e6;
+                font-weight: bold;
+                font-size: 13px;
+            """)
+        field_layout.addWidget(field_desc_label)
+        
+        field_tab.setLayout(field_layout)
+        
+        # 添加标签页
+        tab_widget.addTab(ctrl_tab, "Ctrl模板")
+        tab_widget.addTab(field_tab, "Field模板")
+        
+        layout.addWidget(tab_widget)
         
         # 按钮
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
