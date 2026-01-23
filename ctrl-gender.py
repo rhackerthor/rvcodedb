@@ -1334,11 +1334,11 @@ class RecordManagerDialog(QDialog):
             QMessageBox.warning(self, "警告", "请先选择一条记录！")
             return
         
-        # 生成代码
-        code = self.generator.generate_chisel_code(record)
+        # 生成代码 - 这里获取的是元组(ctrl_code, field_code)
+        code_tuple = self.generator.generate_chisel_code(record)
         
-        # 显示代码对话框
-        dialog = CodePreviewDialog(self, record['name'], code)
+        # 显示代码对话框 - 传入元组
+        dialog = CodePreviewDialog(self, record['name'], code_tuple)
         dialog.exec()
 
 class CodePreviewDialog(QDialog):
@@ -1346,34 +1346,68 @@ class CodePreviewDialog(QDialog):
     def __init__(self, parent=None, title="", code=""):
         super().__init__(parent)
         
+        # 处理传入的code参数
+        # 如果传入的是元组(ctrl_code, field_code)，则分别处理
+        # 如果传入的是字符串，则视为ctrl_code
+        if isinstance(code, tuple) and len(code) == 2:
+            self.ctrl_code = code[0]
+            self.field_code = code[1]
+        else:
+            self.ctrl_code = code if isinstance(code, str) else ""
+            self.field_code = ""
+        
         self.setWindowTitle(f"代码预览 - {title}")
         self.setModal(True)
-        self.resize(850, 650)
+        self.resize(950, 700)  # 增加宽度以容纳两个标签页
         
         # 加载当前主题
         self.settings = QSettings("rvctrl-gender", "settings")
         self.current_theme = self.settings.value("current_theme", "light", type=str)
         
-        self.init_ui(code)
+        self.init_ui()
     
-    def init_ui(self, code):
+    def init_ui(self):
         layout = QVBoxLayout()
         
-        # 代码编辑器
-        self.code_edit = QTextEdit()
-        self.code_edit.setFont(QFont("Monospace", 11))
-        self.code_edit.setText(code)
-        layout.addWidget(self.code_edit)
+        # 创建标签页
+        self.tab_widget = QTabWidget()
+        
+        # Ctrl代码标签页
+        ctrl_tab = QWidget()
+        ctrl_layout = QVBoxLayout()
+        
+        self.ctrl_code_edit = QTextEdit()
+        self.ctrl_code_edit.setFont(QFont("Monospace", 11))
+        self.ctrl_code_edit.setText(self.ctrl_code)
+        ctrl_layout.addWidget(self.ctrl_code_edit)
+        
+        ctrl_tab.setLayout(ctrl_layout)
+        self.tab_widget.addTab(ctrl_tab, "Ctrl代码")
+        
+        # Field代码标签页（如果有Field代码）
+        if self.field_code:
+            field_tab = QWidget()
+            field_layout = QVBoxLayout()
+            
+            self.field_code_edit = QTextEdit()
+            self.field_code_edit.setFont(QFont("Monospace", 11))
+            self.field_code_edit.setText(self.field_code)
+            field_layout.addWidget(self.field_code_edit)
+            
+            field_tab.setLayout(field_layout)
+            self.tab_widget.addTab(field_tab, "Field代码")
+        
+        layout.addWidget(self.tab_widget)
         
         # 按钮
         button_layout = QHBoxLayout()
         
-        copy_btn = QPushButton("📋 复制代码")
-        copy_btn.clicked.connect(self.copy_code)
+        copy_btn = QPushButton("📋 复制当前代码")
+        copy_btn.clicked.connect(self.copy_current_code)
         button_layout.addWidget(copy_btn)
         
-        save_btn = QPushButton("💾 保存到文件")
-        save_btn.clicked.connect(self.save_code)
+        save_btn = QPushButton("💾 保存所有文件")
+        save_btn.clicked.connect(self.save_all_files)
         button_layout.addWidget(save_btn)
         
         button_layout.addStretch()
@@ -1385,26 +1419,49 @@ class CodePreviewDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
     
-    def copy_code(self):
-        """复制代码到剪贴板"""
+    def get_current_code(self):
+        """获取当前标签页的代码"""
+        current_index = self.tab_widget.currentIndex()
+        if current_index == 0:  # Ctrl代码标签页
+            return self.ctrl_code_edit.toPlainText()
+        elif current_index == 1 and hasattr(self, 'field_code_edit'):  # Field代码标签页
+            return self.field_code_edit.toPlainText()
+        return self.ctrl_code_edit.toPlainText()
+    
+    def copy_current_code(self):
+        """复制当前标签页的代码到剪贴板"""
+        code = self.get_current_code()
+        if not code.strip():
+            QMessageBox.warning(self, "警告", "没有代码可复制！")
+            return
+        
         clipboard = QApplication.clipboard()
-        clipboard.setText(self.code_edit.toPlainText())
+        clipboard.setText(code)
         QMessageBox.information(self, "成功", "代码已复制到剪贴板！")
     
-    def save_code(self):
+    def save_all_files(self):
+        """保存所有代码到文件"""
+        # 保存Ctrl代码
+        if self.ctrl_code_edit.toPlainText().strip():
+            self.save_code_file(self.ctrl_code_edit.toPlainText(), "Ctrl")
+        
+        # 保存Field代码（如果存在）
+        if hasattr(self, 'field_code_edit') and self.field_code_edit.toPlainText().strip():
+            self.save_code_file(self.field_code_edit.toPlainText(), "Field")
+    
+    def save_code_file(self, code, file_type):
         """保存代码到文件"""
         # 从代码中提取类名
-        code = self.code_edit.toPlainText()
         class_name = self.extract_class_name(code)
         
         if not class_name:
-            class_name = "ControlSignal"
+            class_name = f"ControlSignal{file_type}"
         
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "保存Scala文件",
+            f"保存{file_type}文件",
             f"{class_name}.scala",
-            "Scala文件 (*.scala);;所有文件 (*.*)"
+            f"Scala文件 (*.scala);;所有文件 (*.*)"
         )
         
         if file_path:
@@ -1419,7 +1476,7 @@ class CodePreviewDialog(QDialog):
                 with open(file_path, 'w') as f:
                     f.write(code)
                 
-                QMessageBox.information(self, "成功", f"代码已保存到:\n{file_path}")
+                QMessageBox.information(self, "成功", f"{file_type}代码已保存到:\n{file_path}")
             except PermissionError:
                 QMessageBox.critical(
                     self,
