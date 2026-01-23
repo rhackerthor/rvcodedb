@@ -63,10 +63,11 @@ class ControlSignal:
 
 class InstructionSelectDialog(QDialog):
     """指令选择对话框"""
-    def __init__(self, parent=None, instructions=None, selected_instructions=None):
+    def __init__(self, parent=None, instructions=None, selected_instructions=None, disabled_instructions=None):
         super().__init__(parent)
         self.instructions = instructions or []
         self.selected_instructions = set(selected_instructions or [])
+        self.disabled_instructions = set(disabled_instructions or [])
         
         self.setWindowTitle("选择指令")
         self.setModal(True)
@@ -124,6 +125,10 @@ class InstructionSelectDialog(QDialog):
                 color: #ffffff;
                 font-weight: bold;
             }
+            QListWidget::item:disabled {
+                background-color: #f1f3f4;
+                color: #95a5a6;
+            }
             QPushButton {
                 background-color: #f8f9fa;
                 color: #2c3e50;
@@ -179,6 +184,10 @@ class InstructionSelectDialog(QDialog):
                 color: #ffffff;
                 font-weight: bold;
             }
+            QListWidget::item:disabled {
+                background-color: #4a4a4a;
+                color: #777777;
+            }
             QPushButton {
                 background-color: #3c3c3c;
                 color: #e0e0e0;
@@ -208,6 +217,16 @@ class InstructionSelectDialog(QDialog):
         self.search_edit.setPlaceholderText("输入指令名、指令集或编码进行搜索...")
         search_layout.addWidget(self.search_edit)
         layout.addLayout(search_layout)
+        
+        # 禁用指令提示
+        if self.disabled_instructions:
+            disabled_count = len(self.disabled_instructions)
+            disabled_info = QLabel(f"⚠️ 有 {disabled_count} 条指令已被其他值使用，不可选择")
+            if self.current_theme == "dark":
+                disabled_info.setStyleSheet("color: #ffa726; font-weight: bold;")
+            else:
+                disabled_info.setStyleSheet("color: #f39c12; font-weight: bold;")
+            layout.addWidget(disabled_info)
         
         # 指令列表
         self.list_widget = QListWidget()
@@ -255,11 +274,25 @@ class InstructionSelectDialog(QDialog):
             
             item = QListWidgetItem(display_text)
             item.setData(Qt.ItemDataRole.UserRole, inst.name)
-            item.setToolTip(f"指令: {inst.name}\n指令集: {inst.extension}\n编码: {inst.encode}\n参数: {' '.join(inst.args)}")
+            
+            # 设置工具提示
+            tooltip = f"指令: {inst.name}\n指令集: {inst.extension}\n编码: {inst.encode}\n参数: {' '.join(inst.args)}"
+            if inst.name in self.disabled_instructions:
+                tooltip += "\n\n❌ 此指令已被其他值使用"
+            item.setToolTip(tooltip)
+            
+            # 禁用已被其他值使用的指令
+            if inst.name in self.disabled_instructions:
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+                if self.current_theme == "dark":
+                    item.setBackground(QColor("#4a4a4a"))
+                else:
+                    item.setBackground(QColor("#f1f3f4"))
+            
             self.list_widget.addItem(item)
             
-            # 设置选中状态
-            if inst.name in self.selected_instructions:
+            # 设置选中状态（只选中不在禁用列表中的指令）
+            if inst.name in self.selected_instructions and inst.name not in self.disabled_instructions:
                 item.setSelected(True)
     
     def filter_instructions(self, text):
@@ -272,10 +305,10 @@ class InstructionSelectDialog(QDialog):
             item.setHidden(text not in inst_name and text not in item_text)
     
     def select_all(self):
-        """全选"""
+        """全选（跳过已禁用的指令）"""
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
-            if not item.isHidden():
+            if not item.isHidden() and item.flags() & Qt.ItemFlag.ItemIsEnabled:
                 item.setSelected(True)
     
     def clear_all(self):
@@ -301,6 +334,7 @@ class ValueConfigWidget(QFrame):
         super().__init__(parent)
         self.instructions = instructions or []
         self.selected_instructions = []
+        self.get_disabled_instructions_func = None  # 用于获取其他值已选指令的函数
         
         self.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
         self.setLineWidth(2)
@@ -310,6 +344,10 @@ class ValueConfigWidget(QFrame):
         self.current_theme = self.settings.value("current_theme", "light", type=str)
         
         self.init_ui(value_name)
+    
+    def set_get_disabled_instructions_func(self, func):
+        """设置获取其他值已选指令的函数"""
+        self.get_disabled_instructions_func = func
     
     def init_ui(self, value_name):
         layout = QVBoxLayout()
@@ -381,14 +419,52 @@ class ValueConfigWidget(QFrame):
     
     def select_instructions(self):
         """打开指令选择对话框"""
+        # 获取其他值已选的指令
+        disabled_instructions = set()
+        if self.get_disabled_instructions_func:
+            disabled_instructions = self.get_disabled_instructions_func()
+        
+        # 过滤当前已选指令，移除已被其他值选中的指令
+        filtered_selected = [inst for inst in self.selected_instructions 
+                           if inst not in disabled_instructions]
+        
+        # 如果过滤后有变化，更新当前值
+        if len(filtered_selected) != len(self.selected_instructions):
+            self.selected_instructions = filtered_selected
+            self.update_preview()
+            self.config_changed.emit()
+        
         dialog = InstructionSelectDialog(
             self,
             self.instructions,
-            self.selected_instructions
+            self.selected_instructions,
+            disabled_instructions
         )
         
         if dialog.exec():
-            self.selected_instructions = dialog.get_selected_instructions()
+            new_selected = dialog.get_selected_instructions()
+            
+            # 检查是否有指令冲突
+            conflict_instructions = set(new_selected) & disabled_instructions
+            if conflict_instructions:
+                conflict_list = ", ".join(sorted(conflict_instructions)[:3])
+                if len(conflict_instructions) > 3:
+                    conflict_list += f" 等 {len(conflict_instructions)} 条指令"
+                
+                reply = QMessageBox.question(
+                    self,
+                    "指令冲突",
+                    f"以下指令已被其他值使用:\n{conflict_list}\n\n是否要移除这些指令？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    new_selected = [inst for inst in new_selected 
+                                   if inst not in conflict_instructions]
+                else:
+                    return  # 保持原选择
+            
+            self.selected_instructions = new_selected
             self.update_preview()
             self.config_changed.emit()
     
@@ -1130,10 +1206,25 @@ class RISCVCtrlGenerator:
     def create_control_signal(self, name: str, encoding_type: str, 
                             value_mapping: Dict[str, List[str]]) -> Dict[str, Any]:
         """创建控制信号"""
-        # 收集所有指令
+        # 检查指令是否重复
         all_instructions = []
         for inst_list in value_mapping.values():
             all_instructions.extend(inst_list)
+        
+        # 检查是否有重复指令
+        if len(all_instructions) != len(set(all_instructions)):
+            duplicate_instructions = []
+            seen = set()
+            for inst in all_instructions:
+                if inst in seen:
+                    duplicate_instructions.append(inst)
+                seen.add(inst)
+            
+            if duplicate_instructions:
+                duplicate_list = ", ".join(sorted(duplicate_instructions)[:5])
+                if len(duplicate_instructions) > 5:
+                    duplicate_list += f" 等 {len(duplicate_instructions)} 条指令"
+                raise Exception(f"指令在多个值中重复出现: {duplicate_list}")
         
         # 计算宽度
         if encoding_type == "OneHot":
@@ -2466,8 +2557,28 @@ class MainWindow(QMainWindow):
         )
         widget.config_changed.connect(self.on_config_changed)
         
+        # 设置获取禁用指令的函数
+        widget.set_get_disabled_instructions_func(lambda: self.get_disabled_instructions_for_widget(widget))
+        
         self.value_container_layout.addWidget(widget)
         self.value_widgets.append(widget)
+        
+        # 触发配置变化，以更新所有值部件的禁用状态
+        self.on_config_changed()
+    
+    def get_disabled_instructions_for_widget(self, current_widget):
+        """获取除了指定部件外的其他部件已选指令"""
+        disabled = set()
+        for widget in self.value_widgets:
+            if widget is not current_widget:
+                disabled.update(widget.selected_instructions)
+        return disabled
+    
+    def on_config_changed(self):
+        """配置变化时的处理"""
+        # 更新所有值部件的禁用指令函数
+        for widget in self.value_widgets:
+            widget.set_get_disabled_instructions_func(lambda w=widget: self.get_disabled_instructions_for_widget(w))
     
     def remove_last_value_widget(self):
         """删除最后一个值配置部件"""
@@ -2478,10 +2589,9 @@ class MainWindow(QMainWindow):
             # 如果没有值部件了，显示提示标签
             if len(self.value_widgets) == 0 and hasattr(self, 'value_hint_label'):
                 self.value_hint_label.show()
-    
-    def on_config_changed(self):
-        """配置变化时的处理"""
-        pass  # 可以添加实时验证逻辑
+            
+            # 触发配置变化，以更新所有值部件的禁用状态
+            self.on_config_changed()
     
     def load_record_data(self, record):
         """加载记录数据到界面"""
@@ -2519,6 +2629,9 @@ class MainWindow(QMainWindow):
             widget.set_config(value_name, instructions)
             widget.config_changed.connect(self.on_config_changed)
             
+            # 设置获取禁用指令的函数
+            widget.set_get_disabled_instructions_func(lambda w=widget: self.get_disabled_instructions_for_widget(w))
+            
             self.value_container_layout.addWidget(widget)
             self.value_widgets.append(widget)
         
@@ -2544,15 +2657,38 @@ class MainWindow(QMainWindow):
         value_mapping = {}
         invalid_widgets = []
         
+        # 检查指令是否重复
+        all_instructions = set()
+        duplicate_instructions = set()
+        
         for i, widget in enumerate(self.value_widgets):
             config = widget.get_config()
             if widget.is_valid():
                 value_mapping[config['name']] = config['instructions']
+                
+                # 检查指令重复
+                for inst in config['instructions']:
+                    if inst in all_instructions:
+                        duplicate_instructions.add(inst)
+                    all_instructions.add(inst)
             else:
                 invalid_widgets.append(i + 1)
         
         if not value_mapping:
             QMessageBox.warning(self, "警告", "请至少配置一个有效的值！")
+            return
+        
+        # 检查是否有指令重复
+        if duplicate_instructions:
+            duplicate_list = ", ".join(sorted(duplicate_instructions)[:5])
+            if len(duplicate_instructions) > 5:
+                duplicate_list += f" 等 {len(duplicate_instructions)} 条指令"
+            
+            QMessageBox.critical(
+                self,
+                "指令重复错误",
+                f"以下指令在多个值中重复出现:\n{duplicate_list}\n\n请确保每条指令只出现在一个值中！"
+            )
             return
         
         if invalid_widgets:
