@@ -1193,20 +1193,31 @@ class CodePreviewDialog(QDialog):
     
     def save_code(self):
         """保存代码到文件"""
+        # 从代码中提取类名
+        code = self.code_edit.toPlainText()
+        class_name = self.extract_class_name(code)
+        
+        if not class_name:
+            class_name = "ControlSignal"
+        
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "保存Scala文件",
-            "",
+            f"{class_name}.scala",
             "Scala文件 (*.scala);;所有文件 (*.*)"
         )
         
         if file_path:
             try:
+                # 确保文件扩展名为.scala
+                if not file_path.endswith('.scala'):
+                    file_path += '.scala'
+                
                 # 创建目录（如果需要）
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 
                 with open(file_path, 'w') as f:
-                    f.write(self.code_edit.toPlainText())
+                    f.write(code)
                 
                 QMessageBox.information(self, "成功", f"代码已保存到:\n{file_path}")
             except PermissionError:
@@ -1217,6 +1228,25 @@ class CodePreviewDialog(QDialog):
                 )
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"保存文件失败:\n{str(e)}")
+    
+    def extract_class_name(self, code):
+        """从Scala代码中提取类名"""
+        # 查找 object 声明
+        lines = code.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith('object '):
+                # 提取 object 名称
+                parts = line.split()
+                if len(parts) >= 2:
+                    name = parts[1]
+                    # 移除可能的后缀
+                    if 'extends' in name:
+                        name = name.split('extends')[0].strip()
+                    if '(' in name:
+                        name = name.split('(')[0].strip()
+                    return name.strip()
+        return None
 
 class RISCVCtrlGenerator:
     """RISC-V 控制信号生成器核心逻辑"""
@@ -1424,8 +1454,8 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         
         return '\n'.join(formatted_lines)
     
-    def save_scala_file(self, code: str) -> str:
-        """保存Scala文件"""
+    def save_scala_file(self, code: str, signal_name: str = None) -> str:
+        """保存Scala文件，文件名与类名相同"""
         save_path = self.settings.value("scala_save_path", str(Path.home() / "riscv_scala"))
         
         # 确保目录存在
@@ -1434,9 +1464,38 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         except PermissionError:
             raise PermissionError(f"没有权限创建目录: {save_path}")
         
+        # 提取类名
+        if signal_name:
+            class_name = signal_name
+        else:
+            # 从代码中提取类名
+            lines = code.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('object '):
+                    # 提取 object 名称
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        name = parts[1]
+                        # 移除可能的后缀
+                        if 'extends' in name:
+                            name = name.split('extends')[0].strip()
+                        if '(' in name:
+                            name = name.split('(')[0].strip()
+                        class_name = name.strip()
+                        break
+            else:
+                # 如果没有找到object定义，使用默认名称
+                class_name = "ControlSignal"
+        
         # 生成文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = os.path.join(save_path, f"InstType_{timestamp}.scala")
+        file_path = os.path.join(save_path, f"{class_name}.scala")
+        
+        # 如果文件已存在，添加序号
+        counter = 1
+        while os.path.exists(file_path):
+            file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
+            counter += 1
         
         # 保存文件
         with open(file_path, 'w') as f:
@@ -2433,6 +2492,11 @@ class MainWindow(QMainWindow):
         remove_value_btn.clicked.connect(self.remove_last_value_widget)
         btn_layout.addWidget(remove_value_btn)
         
+        # 新增：清空所有值按钮
+        clear_all_values_btn = QPushButton("🗑️ 清空所有值")
+        clear_all_values_btn.clicked.connect(self.clear_all_value_widgets)
+        btn_layout.addWidget(clear_all_values_btn)
+        
         btn_layout.addStretch()
         value_layout.addLayout(btn_layout)
         
@@ -2661,6 +2725,37 @@ class MainWindow(QMainWindow):
             # 触发配置变化，以更新所有值部件的禁用状态
             self.on_config_changed()
     
+    def clear_all_value_widgets(self):
+        """清空所有值定义"""
+        if len(self.value_widgets) == 0:
+            return
+            
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            f"确定要清空所有 {len(self.value_widgets)} 个值定义吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 删除所有值部件
+            for widget in self.value_widgets:
+                widget.deleteLater()
+            self.value_widgets.clear()
+            
+            # 显示提示标签
+            if hasattr(self, 'value_hint_label'):
+                self.value_hint_label.show()
+            
+            # 更新状态栏
+            self.status_bar.showMessage("🗑️ 已清空所有值定义")
+            
+            # 清空代码预览
+            self.code_editor.clear()
+            
+            # 触发配置变化
+            self.on_config_changed()
+    
     def load_record_data(self, record):
         """加载记录数据到界面"""
         self.current_record = record
@@ -2808,15 +2903,19 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("✅ 代码已复制到剪贴板！")
     
     def save_code_file(self):
-        """保存代码到文件"""
+        """保存代码到文件，文件名与类名相同"""
         code = self.code_editor.toPlainText()
         if not code.strip():
             QMessageBox.warning(self, "警告", "没有代码可保存！")
             return
         
         try:
-            # 使用生成器保存文件
-            file_path = self.generator.save_scala_file(code)
+            # 使用生成器保存文件，传递信号名称
+            signal_name = self.signal_name_edit.text().strip()
+            if not signal_name:
+                signal_name = None
+                
+            file_path = self.generator.save_scala_file(code, signal_name)
             
             QMessageBox.information(
                 self,

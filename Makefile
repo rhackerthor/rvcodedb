@@ -1,5 +1,6 @@
 # path
 TARGET_PATH=$(shell pwd)
+# TARGET_PATH=$(shell pwd)/../src/main/resources/rvdb
 CHISEL_TEST_PATH=$(shell pwd)/chisel-test/src/main/resources/rvdb
 RISCV_OPCODES_PATH=$(shell pwd)/riscv-opcodes
 
@@ -9,7 +10,7 @@ CHISEL_TEST=$(CHISEL_TEST_PATH)/riscv-opcode.db
 JSON=$(RISCV_OPCODES_PATH)/instr_dict.json
 
 # 添加需要使用的指令集
-EXTENSION=rv_i,rv_m,rv_zicsr
+EXTENSION=rv_i,rv_m,rv_zicsr,rv64_i
 
 # venv
 VENV = venv
@@ -17,7 +18,7 @@ PYTHON = $(VENV)/bin/python
 PIP = $(VENV)/bin/pip
 
 all: default
-default: inst_db
+default: inst-db
 
 $(VENV)/bin/activate: requirements.txt
 	python3 -m venv $(VENV)
