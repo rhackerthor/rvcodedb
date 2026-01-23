@@ -29,13 +29,13 @@ inst-json:
 	echo "$(RISCV_OPCODES_PATH)"
 	$(MAKE) -C $(RISCV_OPCODES_PATH)
 
-inst-db: inst_json $(VENV)/bin/activate
+inst-db: inst-json $(VENV)/bin/activate
 	$(PYTHON) db.py --input $(JSON) --output $(TARGET) --extension $(EXTENSION)
 
-chisel-test: inst_json $(VENV)/bin/activate
+chisel-test: inst-json $(VENV)/bin/activate
 	$(PYTHON) db.py --input $(JSON) --output $(CHISEL_TEST) --extension $(EXTENSION)
 
-ctrl-gender: inst_json $(VENV)/bin/activate
+ctrl-gender: inst-db $(VENV)/bin/activate
 	$(PYTHON) ctrl-gender.py
 
 .PHONY: all default inst_json inst_db chisel_test
