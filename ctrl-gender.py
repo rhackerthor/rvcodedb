@@ -715,7 +715,7 @@ class TemplateManagerDialog(QDialog):
 // 生成时间: {generation_time}
 // ===========================================
 
-package rv.util.decoder.ctrl
+package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
@@ -742,14 +742,11 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
     
     def load_default_field_template(self):
         """加载默认Field模板"""
-        default_field_template = """package rv.util.decoder.filed
+        default_field_template = """package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-
-import rv.util.decoder.InstructionPattern
-import rv.util.decoder.ctrl.{signal_name}
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
@@ -771,7 +768,7 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
 // 生成时间: {generation_time}
 // ===========================================
 
-package rv.util.decoder.ctrl
+package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
@@ -810,14 +807,11 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
 // 生成时间: {generation_time}
 // ===========================================
 
-package rv.util.decoder.filed
+package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-
-import rv.util.decoder.InstructionPattern
-import rv.util.decoder.ctrl.{signal_name}
 
 /**
   * {signal_name}Field - 解码字段类
@@ -1642,7 +1636,7 @@ class RISCVCtrlGenerator:
 // 生成时间: {generation_time}
 // ===========================================
 
-package rv.util.decoder.ctrl
+package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
@@ -1719,14 +1713,11 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
         
         # 如果没有自定义模板，使用默认模板
         if not template:
-            template = """package rv.util.decoder.filed
+            template = """package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-
-import rv.util.decoder.InstructionPattern
-import rv.util.decoder.ctrl.{signal_name}
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
@@ -3441,7 +3432,7 @@ class MainWindow(QMainWindow):
 // 生成时间: {generation_time}
 // ===========================================
 
-package rv.util.decoder.ctrl
+package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
@@ -3466,14 +3457,11 @@ object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
 }"""
         
         if not field_template:
-            field_template = """package rv.util.decoder.filed
+            field_template = """package rv.util.decoder
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-
-import rv.util.decoder.InstructionPattern
-import rv.util.decoder.ctrl.{signal_name}
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
