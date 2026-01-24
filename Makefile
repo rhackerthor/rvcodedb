@@ -10,7 +10,7 @@ CHISEL_TEST=$(CHISEL_TEST_PATH)/riscv-opcode.db
 JSON=$(RISCV_OPCODES_PATH)/instr_dict.json
 
 # 添加需要使用的指令集
-EXTENSION=rv_i,rv_m,rv_zicsr,rv64_i
+EXTENSION=rv_i,rv_m,rv_zicsr,rv64_i,rv_system
 
 # venv
 VENV = venv
