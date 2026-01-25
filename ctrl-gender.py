@@ -726,7 +726,7 @@ import rv.util.CtrlEnum
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
-object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+object {signal_name}Ctrl extends CtrlEnum(CtrlEnum.{encoding_type}) {
   // 值定义
 {values_list}
   
@@ -779,7 +779,7 @@ import rv.util.CtrlEnum
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
-object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+object {signal_name}Ctrl extends CtrlEnum(CtrlEnum.{encoding_type}) {
   // 值定义
 {values_list}
   
@@ -1231,10 +1231,22 @@ class RecordManagerDialog(QDialog):
             """
     
     def load_records(self):
-        """加载记录"""
+        """加载记录 - 修改时间从近到远排序"""
         self.table.setRowCount(0)
         
         records = self.generator.load_records()
+        
+        # 按修改时间排序（从近到远）
+        # 将字符串时间转换为datetime对象进行比较
+        def parse_time(time_str):
+            try:
+                return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+            except:
+                return datetime.min
+        
+        # 按创建时间降序排序（最新的在前）
+        records.sort(key=lambda x: parse_time(x.get('created_at', '')), reverse=True)
+        
         for record in records:
             row = self.table.rowCount()
             self.table.insertRow(row)
@@ -1444,7 +1456,7 @@ class CodePreviewDialog(QDialog):
             self.save_code_file(self.field_code_edit.toPlainText(), "Field")
     
     def save_code_file(self, code, file_type):
-        """保存代码到文件"""
+        """保存代码到文件 - 提供覆盖选项"""
         # 从代码中提取类名
         class_name = self.extract_class_name(code)
         
@@ -1459,11 +1471,23 @@ class CodePreviewDialog(QDialog):
         )
         
         if file_path:
-            try:
-                # 确保文件扩展名为.scala
-                if not file_path.endswith('.scala'):
-                    file_path += '.scala'
+            # 确保文件扩展名为.scala
+            if not file_path.endswith('.scala'):
+                file_path += '.scala'
+            
+            # 检查文件是否存在
+            if os.path.exists(file_path):
+                reply = QMessageBox.question(
+                    self,
+                    "文件已存在",
+                    f"文件 {os.path.basename(file_path)} 已存在，是否覆盖？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
                 
+                if reply == QMessageBox.StandardButton.No:
+                    return  # 用户选择不覆盖，取消保存
+            
+            try:
                 # 创建目录（如果需要）
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 
@@ -1595,13 +1619,25 @@ class RISCVCtrlGenerator:
             print(f"保存记录失败: {e}")
     
     def load_records(self) -> List[Dict[str, Any]]:
-        """加载所有记录"""
+        """加载所有记录 - 按创建时间排序（从近到远）"""
         if not os.path.exists(self.records_file):
             return []
         
         try:
             with open(self.records_file, 'r') as f:
-                return json.load(f)
+                records = json.load(f)
+            
+            # 将字符串时间转换为datetime对象进行比较
+            def parse_time(time_str):
+                try:
+                    return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                except:
+                    return datetime.min
+            
+            # 按创建时间降序排序（最新的在前）
+            records.sort(key=lambda x: parse_time(x.get('created_at', '')), reverse=True)
+            
+            return records
         except:
             return []
     
@@ -1647,7 +1683,7 @@ import rv.util.CtrlEnum
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
-object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+object {signal_name}Ctrl extends CtrlEnum(CtrlEnum.{encoding_type}) {
   // 值定义
 {values_list}
   
@@ -1804,16 +1840,14 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         
         return '\n'.join(formatted_lines)
     
-    def save_ctrl_file(self, code: str, signal_name: str = None) -> str:
-        """保存Ctrl文件"""
+    def save_ctrl_file(self, code: str, signal_name: str = None, overwrite: bool = False) -> str:
+        """保存Ctrl文件 - 提供覆盖选项"""
         save_path = self.settings.value("ctrl_save_path", str(Path.home() / "riscv-scala" / "ctrl"))
         
         # 确保目录存在
         try:
-            print("hello\n")
             os.makedirs(save_path, exist_ok=True)
         except PermissionError:
-            print("hello\n")
             raise PermissionError(f"没有权限创建目录: {save_path}")
         
         # 提取类名
@@ -1843,11 +1877,12 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
         
-        # 如果文件已存在，添加序号
-        counter = 1
-        while os.path.exists(file_path):
-            file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
-            counter += 1
+        # 如果文件已存在且不覆盖，添加序号
+        if os.path.exists(file_path) and not overwrite:
+            counter = 1
+            while os.path.exists(file_path):
+                file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
+                counter += 1
         
         # 保存文件
         with open(file_path, 'w') as f:
@@ -1855,8 +1890,8 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         
         return file_path
     
-    def save_field_file(self, code: str, signal_name: str = None) -> str:
-        """保存Field文件"""
+    def save_field_file(self, code: str, signal_name: str = None, overwrite: bool = False) -> str:
+        """保存Field文件 - 提供覆盖选项"""
         if not code:  # 如果没有生成field代码
             return ""
             
@@ -1895,11 +1930,12 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
         
-        # 如果文件已存在，添加序号
-        counter = 1
-        while os.path.exists(file_path):
-            file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
-            counter += 1
+        # 如果文件已存在且不覆盖，添加序号
+        if os.path.exists(file_path) and not overwrite:
+            counter = 1
+            while os.path.exists(file_path):
+                file_path = os.path.join(save_path, f"{class_name}_{counter}.scala")
+                counter += 1
         
         # 保存文件
         with open(file_path, 'w') as f:
@@ -1907,13 +1943,13 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         
         return file_path
     
-    def save_scala_files(self, ctrl_code: str, field_code: str, signal_name: str = None) -> Tuple[str, str]:
-        """保存Scala文件，返回(ctrl_file_path, field_file_path)"""
-        ctrl_file_path = self.save_ctrl_file(ctrl_code, signal_name)
+    def save_scala_files(self, ctrl_code: str, field_code: str, signal_name: str = None, overwrite: bool = False) -> Tuple[str, str]:
+        """保存Scala文件，返回(ctrl_file_path, field_file_path) - 提供覆盖选项"""
+        ctrl_file_path = self.save_ctrl_file(ctrl_code, signal_name, overwrite)
         
         field_file_path = ""
         if field_code:
-            field_file_path = self.save_field_file(field_code, signal_name)
+            field_file_path = self.save_field_file(field_code, signal_name, overwrite)
         
         return ctrl_file_path, field_file_path
 
@@ -3357,7 +3393,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"✅ {code_type}代码已复制到剪贴板！")
     
     def save_all_files(self):
-        """保存所有代码到文件"""
+        """保存所有代码到文件 - 修改：添加覆盖选项"""
         ctrl_code = self.ctrl_code_editor.toPlainText()
         if not ctrl_code.strip():
             QMessageBox.warning(self, "警告", "没有Ctrl代码可保存！")
@@ -3372,9 +3408,53 @@ class MainWindow(QMainWindow):
             # 获取Field代码
             field_code = self.field_code_editor.toPlainText()
             
+            # 首先预测文件路径
+            save_path = self.settings.value("ctrl_save_path", str(Path.home() / "riscv-scala" / "ctrl"))
+            
+            # 提取类名
+            if signal_name:
+                class_name = signal_name
+            else:
+                # 从代码中提取类名
+                lines = ctrl_code.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('object '):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            name = parts[1]
+                            if 'extends' in name:
+                                name = name.split('extends')[0].strip()
+                            if '(' in name:
+                                name = name.split('(')[0].strip()
+                            class_name = name.strip()
+                            break
+                else:
+                    class_name = "ControlSignal"
+            
+            # 预测Ctrl文件路径
+            ctrl_file_path = os.path.join(save_path, f"{class_name}.scala")
+            
+            # 检查文件是否存在
+            overwrite = False
+            if os.path.exists(ctrl_file_path):
+                reply = QMessageBox.question(
+                    self,
+                    "文件已存在",
+                    f"文件 {class_name}.scala 已存在，是否覆盖？\n选择'是'将覆盖原文件，选择'否'将生成新文件。",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+                )
+                
+                if reply == QMessageBox.StandardButton.Cancel:
+                    return  # 用户取消
+                elif reply == QMessageBox.StandardButton.Yes:
+                    overwrite = True
+                else:
+                    overwrite = False  # 不覆盖，生成新文件
+            
             # 使用生成器保存文件
             ctrl_file_path, field_file_path = self.generator.save_scala_files(
-                ctrl_code, field_code, signal_name
+                ctrl_code, field_code, signal_name, overwrite
             )
             
             # 显示保存结果
