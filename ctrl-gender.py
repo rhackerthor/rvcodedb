@@ -1852,7 +1852,7 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         
         # 提取类名
         if signal_name:
-            class_name = signal_name
+            class_name = f"{signal_name}Ctrl"
         else:
             # 从代码中提取类名
             lines = code.split('\n')
@@ -1874,8 +1874,8 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
                 # 如果没有找到object定义，使用默认名称
                 class_name = "ControlSignal"
 
-        if not class_name.endswith('Ctrl'):
-            class_name = f"{class_name}Ctrl"
+        # if not class_name.endswith('Ctrl'):
+        #     class_name = f"{class_name}Ctrl"
         
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
@@ -1908,7 +1908,7 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
         
         # 提取类名
         if signal_name:
-            class_name = signal_name
+            class_name = f"{signal_name}Field"
         else:
             # 从代码中提取类名
             lines = code.split('\n')
@@ -1930,8 +1930,8 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
                 # 如果没有找到object定义，使用默认名称
                 class_name = "ControlSignalField"
 
-        if not class_name.endswith('Field'):
-            class_name = f"{class_name}Ctrl"
+        # if not class_name.endswith('Field'):
+        #     class_name = f"{class_name}Ctrl"
         
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
