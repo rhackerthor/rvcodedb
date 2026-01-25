@@ -722,7 +722,7 @@ import chisel3.util._
 import rv.util.CtrlEnum
 
 /**
-  * {signal_name} - 控制信号枚举类
+  * {signal_name}Ctrl - 控制信号枚举类
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
@@ -750,12 +750,12 @@ import chisel3.util.experimental.decode._
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
-  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  override def chiselType: UInt = UInt({signal_name}Ctrl.getWidth.W)
   private def map: Seq[(Seq[String], UInt)] = Seq(
 {value_mappings}
   )
   override def genTable(op: InstructionPattern): BitPat = {
-    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+    BitPat(op.nameMatch(map, 0.U({signal_name}Ctrl.getWidth.W)))
   }
 }"""
         self.field_template_edit.setPlainText(default_field_template)
@@ -775,7 +775,7 @@ import chisel3.util._
 import rv.util.CtrlEnum
 
 /**
-  * {signal_name} - 控制信号枚举类
+  * {signal_name}Ctrl - 控制信号枚举类
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
@@ -819,7 +819,7 @@ import chisel3.util.experimental.decode._
   */
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
-  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  override def chiselType: UInt = UInt({signal_name}Ctrl.getWidth.W)
   
   // 指令到值的映射表
   private def map: Seq[(Seq[String], UInt)] = Seq(
@@ -828,7 +828,7 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   
   override def genTable(op: InstructionPattern): BitPat = {
     // 使用名称匹配生成对应的值
-    BitPat(op.nameMatch(map, {signal_name}.default))
+    BitPat(op.nameMatch(map, {signal_name}Ctrl.default))
   }
   
   // 辅助方法：获取所有可能的映射
@@ -1679,7 +1679,7 @@ import chisel3.util._
 import rv.util.CtrlEnum
 
 /**
-  * {signal_name} - 控制信号枚举类
+  * {signal_name}Ctrl - 控制信号枚举类
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
@@ -1757,12 +1757,12 @@ import chisel3.util.experimental.decode._
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
-  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  override def chiselType: UInt = UInt({signal_name}Ctrl.getWidth.W)
   private def map: Seq[(Seq[String], UInt)] = Seq(
 {value_mappings}
   )
   override def genTable(op: InstructionPattern): BitPat = {
-    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+    BitPat(op.nameMatch(map, 0.U({signal_name}Ctrl.getWidth.W)))
   }
 }"""
         
@@ -1873,6 +1873,9 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
             else:
                 # 如果没有找到object定义，使用默认名称
                 class_name = "ControlSignal"
+
+        if not class_name.endswith('Ctrl'):
+            class_name = f"{class_name}Ctrl"
         
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
@@ -1926,6 +1929,9 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
             else:
                 # 如果没有找到object定义，使用默认名称
                 class_name = "ControlSignalField"
+
+        if not class_name.endswith('Field'):
+            class_name = f"{class_name}Ctrl"
         
         # 生成文件名
         file_path = os.path.join(save_path, f"{class_name}.scala")
@@ -3519,11 +3525,11 @@ import chisel3.util._
 import rv.util.CtrlEnum
 
 /**
-  * {signal_name} - 控制信号枚举类
+  * {signal_name}Ctrl - 控制信号枚举类
   * 编码类型: {encoding_type}
   * 信号宽度: {signal_width} bits
   */
-object {signal_name} extends CtrlEnum(CtrlEnum.{encoding_type}) {
+object {signal_name}Ctrl extends CtrlEnum(CtrlEnum.{encoding_type}) {
   // 值定义
 {values_list}
   
@@ -3545,12 +3551,12 @@ import chisel3.util.experimental.decode._
 
 object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "{signal_name}Field"
-  override def chiselType: UInt = UInt({signal_name}.getWidth.W)
+  override def chiselType: UInt = UInt({signal_name}Ctrl.getWidth.W)
   private def map: Seq[(Seq[String], UInt)] = Seq(
 {value_mappings}
   )
   override def genTable(op: InstructionPattern): BitPat = {
-    BitPat(op.nameMatch(map, 0.U({signal_name}.getWidth.W)))
+    BitPat(op.nameMatch(map, 0.U({signal_name}Ctrl.getWidth.W)))
   }
 }"""
         
