@@ -1781,10 +1781,10 @@ object {signal_name}Field extends DecodeField[InstructionPattern, UInt] {
                         inst_str_parts.append(f"    {inst_str}")
                 
                 inst_str = ',\n'.join(inst_str_parts)
-                value_mappings += f"    {name}.is{value_name} -> {name}.Values({name}.{value_name})"
+                value_mappings += f"    {name}Ctrl.is{value_name} -> {name}Ctrl.Values({name}Ctrl.{value_name})"
             else:
                 # 没有指令的情况，使用空序列
-                value_mappings += f"    Seq() -> {name}.Values({name}.{value_name})"
+                value_mappings += f"    Seq() -> {name}Ctrl.Values({name}Ctrl.{value_name})"
             
             # 如果不是最后一个，添加逗号
             if i < len(values) - 1:
@@ -3419,7 +3419,7 @@ class MainWindow(QMainWindow):
             
             # 提取类名
             if signal_name:
-                class_name = signal_name
+                class_name = f"{signal_name}Ctrl"
             else:
                 # 从代码中提取类名
                 lines = ctrl_code.split('\n')
