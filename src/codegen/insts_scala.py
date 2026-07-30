@@ -33,10 +33,6 @@ def _parse_inst_chisel(chisel_path: Path) -> list[tuple[str, str]]:
     return groups
 
 
-def _encoding_to_bitpat(encoding: str) -> str:
-    return encoding.replace("-", "?")
-
-
 INSTRUCTION_PATTERN_TEMPLATE = """case class InstructionPattern(
     name: String,
     code: BitPat,
@@ -100,85 +96,3 @@ def generate_insts_scala_from_chisel(
 
     lines.append("}")
     return "\n".join(lines) + "\n"
-
-
-def generate_insts_scala(
-    instructions,
-    package_name: str = "mq.util.decoder",
-) -> str:
-    """Deprecated: kept for backward compatibility. Use generate_insts_scala_from_chisel instead."""
-    from collections import defaultdict
-
-    groups: dict[str, list] = defaultdict(list)
-    for instr in instructions:
-        if instr.extension:
-            groups[instr.extension[0]].append(instr)
-
-    sorted_exts = sorted(groups.keys())
-
-    lines = [f"package {package_name}", ""]
-    lines += [
-        "import chisel3._",
-        "import chisel3.util._",
-        "import chisel3.util.experimental.decode._",
-        "",
-    ]
-
-    lines.append(INSTRUCTION_PATTERN_TEMPLATE)
-    lines.append("object Instructions {")
-
-    type_names = []
-    for ext in sorted_exts:
-        instrs = sorted(groups[ext], key=lambda i: i.name)
-        if ext.startswith("rv64_"):
-            type_name = ext[5:].upper() + "64Type"
-        elif ext.startswith("rv_"):
-            type_name = ext[3:].upper() + "Type"
-        else:
-            type_name = ext.upper() + "Type"
-        type_names.append(type_name)
-        lines.append(f"  val {type_name} = Map(")
-        for instr in instrs:
-            bp = _encoding_to_bitpat(instr.encoding)
-            padding = " " * max(1, 18 - len(instr.name))
-            lines.append(f'    "{instr.name}"{padding}-> BitPat("b{bp}"),')
-        lines.append("  )")
-
-    if type_names:
-        lines.append("")
-        lines.append("  def db(): Seq[InstructionPattern] = {")
-        lines.append("    val insts = ")
-        lines.append("      " + " ++\n      ".join(type_names))
-        lines.append(
-            '    val seq = insts.map { case (name, code) => {\n'
-            '      InstructionPattern(name, code)\n'
-            '    }}.toSeq\n'
-            '    seq'
-        )
-        lines.append("  }")
-        lines.append(
-            '  def print() = {\n'
-            '    db().foreach(i => {\n'
-            '      println(i.name, i.code.toString)\n'
-            '    })\n'
-            '  }\n'
-        )
-
-    lines.append("}")
-    return "\n".join(lines) + "\n"
-
-
-def export_insts_scala(
-    instructions,
-    output_path: str,
-    package_name: str = "mq.util.decoder",
-) -> bool:
-    try:
-        code = generate_insts_scala(instructions, package_name)
-        out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(code)
-        return True
-    except OSError:
-        return False

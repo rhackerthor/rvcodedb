@@ -3,10 +3,9 @@ from PyQt6.QtWidgets import (
     QMenuBar, QMenu, QMessageBox, QStatusBar, QApplication,
     QFileDialog,
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from pathlib import Path
-import os
 
 from src.models.profile import Profile, Decoder, Group
 from src.models.profile_manager import (
@@ -27,7 +26,7 @@ from src.ui.group_editor import GroupEditorPanel
 from src.ui.code_preview import CodePreviewPanel
 from src.ui.dialogs import (
     NewProfileDialog, NewDecoderDialog,
-    NewGroupDialog, RenameDialog,
+    NewGroupDialog,
 )
 
 
@@ -414,8 +413,6 @@ class MainWindow(QMainWindow):
             return
 
         output_dir = Path(self._profile.output_path)
-        if not output_dir.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
 
         chisel_path = self._project_root / "riscv-opcodes" / "inst.chisel"
         written = export_to_files(self._profile, overwrite=True, chisel_path=chisel_path)
@@ -696,7 +693,7 @@ class MainWindow(QMainWindow):
         self._refresh_code_preview()
 
     def _on_output_browse(self):
-        path = self._group_editor.browse_output_path()
+        self._group_editor.browse_output_path()
 
     def _on_toggle_theme(self):
         self._theme = "day" if self._theme == "night" else "night"

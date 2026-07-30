@@ -1,9 +1,7 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QComboBox, QPushButton, QLabel,
-    QDialogButtonBox, QMessageBox,
+    QDialog, QFormLayout,
+    QLineEdit, QComboBox, QDialogButtonBox,
 )
-from PyQt6.QtCore import Qt
 
 
 class NewProfileDialog(QDialog):
@@ -95,29 +93,3 @@ class NewGroupDialog(QDialog):
 
     def get_name(self) -> str:
         return self._name_edit.text().strip()
-
-
-class RenameDialog(QDialog):
-    def __init__(self, parent=None, title: str = "重命名", label: str = "新名称:",
-                 current: str = ""):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(250)
-
-        layout = QFormLayout(self)
-        self._edit = QLineEdit(current)
-        layout.addRow(label, self._edit)
-
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        layout.addRow(btns)
-
-        self._edit.setFocus()
-        self._edit.selectAll()
-
-    def get_value(self) -> str:
-        return self._edit.text().strip()

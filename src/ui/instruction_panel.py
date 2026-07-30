@@ -166,35 +166,11 @@ class InstructionPanel(QWidget):
     def get_selected_fields(self) -> list[str]:
         return [f for f, cb in self._field_to_checkboxes.items() if cb.isChecked()]
 
-    def get_search_text(self) -> str:
-        return self._search_edit.text().strip()
-
     def set_search_count(self, visible: int, total: int):
         if visible == total:
             self._search_count_label.setText(f"共 {total} 条")
         else:
             self._search_count_label.setText(f"{visible} / {total} 条")
-
-    def update_group_combo_options(self, group_names: list[str], assignments: dict[str, str]):
-        for instr_name, combo in self._instr_to_combo.items():
-            combo.blockSignals(True)
-            combo.clear()
-            combo.addItem("(未分配)")
-            for gname in group_names:
-                combo.addItem(gname)
-            current_group = assignments.get(instr_name, "")
-            if current_group and current_group in group_names:
-                combo.setCurrentText(current_group)
-            else:
-                combo.setCurrentIndex(0)
-            combo.blockSignals(False)
-
-        self._batch_combo.blockSignals(True)
-        self._batch_combo.clear()
-        self._batch_combo.addItem("(选择分组)")
-        for gname in group_names:
-            self._batch_combo.addItem(gname)
-        self._batch_combo.blockSignals(False)
 
     def set_instructions(self, instructions: list[Instruction],
                          group_names: list[str], assignments: dict[str, str]):
@@ -222,34 +198,12 @@ class InstructionPanel(QWidget):
             self._tree.setItemWidget(item, 1, combo)
             self._instr_to_combo[instr.name] = combo
 
+        self._rebuild_batch_combo(group_names)
+
+    def _rebuild_batch_combo(self, group_names: list[str]):
         self._batch_combo.blockSignals(True)
         self._batch_combo.clear()
         self._batch_combo.addItem("(选择分组)")
         for gname in group_names:
             self._batch_combo.addItem(gname)
         self._batch_combo.blockSignals(False)
-
-    def update_assignments(self, assignments: dict[str, str], group_names: list[str]):
-        for instr_name, combo in self._instr_to_combo.items():
-            combo.blockSignals(True)
-            current_group = assignments.get(instr_name, "")
-            if current_group and current_group in group_names:
-                combo.setCurrentText(current_group)
-            else:
-                combo.setCurrentText("(未分配)")
-            combo.blockSignals(False)
-
-    def update_groups(self, group_names: list[str], assignments: dict[str, str]):
-        for instr_name, combo in self._instr_to_combo.items():
-            combo.blockSignals(True)
-            current = combo.currentText()
-            combo.clear()
-            combo.addItem("(未分配)")
-            for gname in group_names:
-                combo.addItem(gname)
-            current_group = assignments.get(instr_name, "")
-            if current_group and current_group in group_names:
-                combo.setCurrentText(current_group)
-            else:
-                combo.setCurrentIndex(0)
-            combo.blockSignals(False)

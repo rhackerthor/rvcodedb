@@ -1,8 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit,
-    QPushButton, QLabel, QGroupBox, QApplication,
+    QPushButton, QGroupBox, QApplication,
 )
-from PyQt6.QtCore import Qt
 
 from src.ui.syntax_highlighter import ScalaHighlighter
 

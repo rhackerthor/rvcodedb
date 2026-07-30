@@ -7,11 +7,11 @@ class Group:
     instructions: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "instructions": list(self.instructions)}
+        return {"name": self.name, "instructions": self.instructions}
 
     @classmethod
     def from_dict(cls, d: dict) -> "Group":
-        return cls(name=d["name"], instructions=list(d.get("instructions", [])))
+        return cls(name=d["name"], instructions=d.get("instructions", []))
 
 
 @dataclass
@@ -42,9 +42,9 @@ class Decoder:
         return None
 
     def assign_instruction(self, instr_name: str, group_name: str | None) -> None:
-        for g in self.groups:
-            if instr_name in g.instructions:
-                g.instructions.remove(instr_name)
+        old_group = self.find_group_for_instruction(instr_name)
+        if old_group:
+            old_group.instructions.remove(instr_name)
         if group_name:
             for g in self.groups:
                 if g.name == group_name:
@@ -86,7 +86,7 @@ class Profile:
             "name": self.name,
             "output_path": self.output_path,
             "package_name": self.package_name,
-            "selected_extensions": list(self.selected_extensions),
+            "selected_extensions": self.selected_extensions,
             "decoders": [d.to_dict() for d in self.decoders],
         }
 
@@ -96,6 +96,6 @@ class Profile:
             name=d["name"],
             output_path=d.get("output_path", ""),
             package_name=d.get("package_name", "mq.util.decoder"),
-            selected_extensions=list(d.get("selected_extensions", [])),
+            selected_extensions=d.get("selected_extensions", []),
             decoders=[Decoder.from_dict(dd) for dd in d.get("decoders", [])],
         )

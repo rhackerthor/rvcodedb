@@ -1,8 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QComboBox, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QMessageBox,
-    QFileDialog,
+    QListWidget, QFileDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -33,7 +32,6 @@ class GroupEditorPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._current_decoder_idx = -1
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -235,7 +233,6 @@ class GroupEditorPanel(QWidget):
         if current_idx >= 0 and current_idx < len(names):
             self._decoder_combo.setCurrentIndex(current_idx)
         self._decoder_combo.blockSignals(False)
-        self._current_decoder_idx = current_idx
 
     def set_decoder_fields(self, name: str, mode: str):
         self._decoder_name_edit.blockSignals(True)
@@ -256,9 +253,6 @@ class GroupEditorPanel(QWidget):
         if select_idx >= 0 and select_idx < len(group_names):
             self._group_list.setCurrentRow(select_idx)
         self._group_list.blockSignals(False)
-
-    def get_group_count(self) -> int:
-        return self._group_list.count()
 
     def browse_output_path(self) -> str:
         path = QFileDialog.getExistingDirectory(self, "选择输出目录")
