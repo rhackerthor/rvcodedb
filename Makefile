@@ -1,41 +1,27 @@
-# path
-TARGET_PATH=$(shell pwd)
-# TARGET_PATH=$(shell pwd)/../src/main/resources/rvdb
-CHISEL_TEST_PATH=$(shell pwd)/chisel-test/src/main/resources/rvdb
-RISCV_OPCODES_PATH=$(shell pwd)/riscv-opcodes
+.PHONY: run clean install init
 
-# file
-TARGET=$(TARGET_PATH)/riscv-opcode.db
-CHISEL_TEST=$(CHISEL_TEST_PATH)/riscv-opcode.db
-JSON=$(RISCV_OPCODES_PATH)/instr_dict.json
+VENV := .venv
+PYTHON := $(VENV)/bin/python3
+PIP := $(VENV)/bin/pip
 
-# 添加需要使用的指令集
-EXTENSION=rv_i,rv_m,rv_zicsr,rv64_i,rv_system
+EXTENSIONS ?= "rv_i rv_m rv64_i rv_system rv_zicsr"
 
-# venv
-VENV = venv
-PYTHON = $(VENV)/bin/python
-PIP = $(VENV)/bin/pip
-
-all: default
-default: inst-db
-
-$(VENV)/bin/activate: requirements.txt
+$(VENV)/bin/python3:
 	python3 -m venv $(VENV)
-	$(PYTHON) -m pip install --upgrade pip
 	$(PIP) install -r requirements.txt
 
-inst-json:
-	echo "$(RISCV_OPCODES_PATH)"
-	$(MAKE) -C $(RISCV_OPCODES_PATH)
+init:
+	git submodule update --init --recursive
+	$(MAKE) -C riscv-opcodes EXTENSIONS=$(EXTENSIONS)
+	python3 -m venv $(VENV)
+	$(PIP) install -r requirements.txt
 
-inst-db: inst-json $(VENV)/bin/activate
-	$(PYTHON) db.py --input $(JSON) --output $(TARGET) --extension $(EXTENSION)
+run: $(VENV)/bin/python3
+	$(PYTHON) -m src.main
 
-chisel-test: inst-json $(VENV)/bin/activate
-	$(PYTHON) db.py --input $(JSON) --output $(CHISEL_TEST) --extension $(EXTENSION)
+clean:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name '*.pyc' -delete 2>/dev/null || true
+	rm -rf run.sh
 
-ctrl-gender: inst-db $(VENV)/bin/activate
-	$(PYTHON) ctrl-gender.py
-
-.PHONY: all default inst_json inst_db chisel_test
+install: $(VENV)/bin/python3

@@ -9,3 +9,11 @@ venv
 !db.py
 !ctrl-gender.py
 !requirements.txt
+
+__pycache__/
+*.pyc
+*.pyo
+
+build/
+.venv/
+
