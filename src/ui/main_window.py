@@ -151,6 +151,10 @@ class MainWindow(QMainWindow):
         ge.output_path_browse.connect(self._on_output_browse)
         ge.export_requested.connect(self._on_export_code)
 
+        ge.ctrl_enum_toggled.connect(self._on_ctrl_enum_toggled)
+        ge.ctrl_enum_package_changed.connect(self._on_ctrl_enum_package_changed)
+        ge.ctrl_enum_output_path_changed.connect(self._on_ctrl_enum_output_path_changed)
+
         cp = self._code_preview
         cp.get_export_button().clicked.connect(self._on_export_code)
 
@@ -202,7 +206,7 @@ class MainWindow(QMainWindow):
     def _refresh_group_editor(self):
         ge = self._group_editor
         if not self._profile:
-            ge.set_profile_fields("", "", "")
+            ge.set_profile_fields("", "", "", False, "mq.util", "")
             ge.set_decoder_list([], -1)
             ge.set_groups([], -1)
             return
@@ -211,6 +215,9 @@ class MainWindow(QMainWindow):
             self._profile.name,
             self._profile.output_path,
             self._profile.package_name,
+            self._profile.generate_ctrl_enum,
+            self._profile.ctrl_enum_package,
+            self._profile.ctrl_enum_output_path,
         )
 
         decoder_names = [d.name for d in self._profile.decoders]
@@ -694,6 +701,24 @@ class MainWindow(QMainWindow):
 
     def _on_output_browse(self):
         self._group_editor.browse_output_path()
+
+    def _on_ctrl_enum_toggled(self, checked: bool):
+        if self._profile:
+            self._profile.generate_ctrl_enum = checked
+            self._dirty = True
+            self._update_status()
+
+    def _on_ctrl_enum_package_changed(self, pkg: str):
+        if self._profile:
+            self._profile.ctrl_enum_package = pkg
+            self._dirty = True
+            self._update_status()
+
+    def _on_ctrl_enum_output_path_changed(self, path: str):
+        if self._profile:
+            self._profile.ctrl_enum_output_path = path
+            self._dirty = True
+            self._update_status()
 
     def _on_toggle_theme(self):
         self._theme = "day" if self._theme == "night" else "night"

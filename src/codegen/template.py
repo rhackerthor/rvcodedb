@@ -8,6 +8,7 @@ from src.codegen.templates.ctrl_enum import (
     INSTR_LINE_TEMPLATE,
     MAP_ENTRY_TEMPLATE,
     DECODER_FIELDS_TEMPLATE,
+    CTRL_ENUM_CLASS_TEMPLATE,
 )
 from src.codegen.insts_scala import generate_insts_scala_from_chisel
 
@@ -72,6 +73,10 @@ def generate_all_code(profile: Profile) -> dict[str, str]:
     return results
 
 
+def generate_ctrl_enum_code(profile: Profile) -> str:
+    return CTRL_ENUM_CLASS_TEMPLATE.replace("%PACKAGE%", profile.ctrl_enum_package)
+
+
 def export_to_files(
     profile: Profile,
     overwrite: bool = False,
@@ -80,6 +85,17 @@ def export_to_files(
     output_dir = Path(profile.output_path)
     written = []
     generated = generate_all_code(profile)
+
+    if overwrite and output_dir.exists():
+        current_decoder_names = {d.name for d in profile.decoders}
+        for f in output_dir.glob("*Ctrl.scala"):
+            decoder_name = f.stem.replace("Ctrl", "")
+            if decoder_name not in current_decoder_names:
+                f.unlink()
+        dec_fields = output_dir / "DecodeFields.scala"
+        if dec_fields.exists() and "DecodeFields.scala" not in generated:
+            dec_fields.unlink()
+
     for filename, code in generated.items():
         out_path = output_dir / filename
         if not overwrite and out_path.exists():
@@ -88,6 +104,16 @@ def export_to_files(
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(code)
         written.append(str(out_path))
+
+    if profile.generate_ctrl_enum:
+        ctrl_code = generate_ctrl_enum_code(profile)
+        ctrl_dir = Path(profile.ctrl_enum_output_path) if profile.ctrl_enum_output_path else output_dir
+        ctrl_path = ctrl_dir / "CtrlEnum.scala"
+        if overwrite or not ctrl_path.exists():
+            ctrl_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(ctrl_path, "w", encoding="utf-8") as f:
+                f.write(ctrl_code)
+            written.append(str(ctrl_path))
 
     if chisel_path is not None and chisel_path.exists():
         insts_code = generate_insts_scala_from_chisel(chisel_path, profile.package_name)

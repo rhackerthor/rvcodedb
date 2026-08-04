@@ -78,6 +78,9 @@ class Profile:
     name: str
     output_path: str = ""
     package_name: str = "mq.util.decoder"
+    generate_ctrl_enum: bool = False
+    ctrl_enum_package: str = "mq.util"
+    ctrl_enum_output_path: str = ""
     selected_extensions: list[str] = field(default_factory=list)
     decoders: list[Decoder] = field(default_factory=list)
 
@@ -86,6 +89,9 @@ class Profile:
             "name": self.name,
             "output_path": self.output_path,
             "package_name": self.package_name,
+            "generate_ctrl_enum": self.generate_ctrl_enum,
+            "ctrl_enum_package": self.ctrl_enum_package,
+            "ctrl_enum_output_path": self.ctrl_enum_output_path,
             "selected_extensions": self.selected_extensions,
             "decoders": [d.to_dict() for d in self.decoders],
         }
@@ -96,6 +102,9 @@ class Profile:
             name=d["name"],
             output_path=d.get("output_path", ""),
             package_name=d.get("package_name", "mq.util.decoder"),
+            generate_ctrl_enum=d.get("generate_ctrl_enum", False),
+            ctrl_enum_package=d.get("ctrl_enum_package", "mq.util"),
+            ctrl_enum_output_path=d.get("ctrl_enum_output_path", ""),
             selected_extensions=d.get("selected_extensions", []),
             decoders=[Decoder.from_dict(dd) for dd in d.get("decoders", [])],
         )

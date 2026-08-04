@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QComboBox, QLabel, QLineEdit,
-    QListWidget, QFileDialog,
+    QListWidget, QFileDialog, QCheckBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -29,6 +29,10 @@ class GroupEditorPanel(QWidget):
     save_requested = pyqtSignal()
     output_path_browse = pyqtSignal()
     export_requested = pyqtSignal()
+
+    ctrl_enum_toggled = pyqtSignal(bool)
+    ctrl_enum_package_changed = pyqtSignal(str)
+    ctrl_enum_output_path_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -75,6 +79,27 @@ class GroupEditorPanel(QWidget):
         self._output_browse_btn.setFixedWidth(30)
         profile_row4.addWidget(self._output_browse_btn)
         profile_layout.addLayout(profile_row4)
+
+        ctrl_enum_row = QHBoxLayout()
+        self._ctrl_enum_check = QCheckBox("生成 CtrlEnum.scala")
+        ctrl_enum_row.addWidget(self._ctrl_enum_check)
+        self._ctrl_enum_pkg_edit = QLineEdit()
+        self._ctrl_enum_pkg_edit.setPlaceholderText("CtrlEnum 包名")
+        self._ctrl_enum_pkg_edit.setEnabled(False)
+        ctrl_enum_row.addWidget(self._ctrl_enum_pkg_edit, 1)
+        profile_layout.addLayout(ctrl_enum_row)
+
+        ctrl_enum_path_row = QHBoxLayout()
+        ctrl_enum_path_row.addWidget(QLabel("路径:"))
+        self._ctrl_enum_path_edit = QLineEdit()
+        self._ctrl_enum_path_edit.setPlaceholderText("CtrlEnum.scala 输出目录（留空使用上方输出路径）")
+        self._ctrl_enum_path_edit.setEnabled(False)
+        ctrl_enum_path_row.addWidget(self._ctrl_enum_path_edit, 1)
+        self._ctrl_enum_path_browse_btn = QPushButton("...")
+        self._ctrl_enum_path_browse_btn.setFixedWidth(30)
+        self._ctrl_enum_path_browse_btn.setEnabled(False)
+        ctrl_enum_path_row.addWidget(self._ctrl_enum_path_browse_btn)
+        profile_layout.addLayout(ctrl_enum_path_row)
 
         profile_btns = QHBoxLayout()
         self._save_btn = QPushButton("保存 Profile")
@@ -200,6 +225,17 @@ class GroupEditorPanel(QWidget):
         self._output_browse_btn.clicked.connect(self.output_path_browse.emit)
         self._export_btn.clicked.connect(self.export_requested.emit)
 
+        self._ctrl_enum_check.toggled.connect(self._on_ctrl_enum_toggled)
+        self._ctrl_enum_pkg_edit.textChanged.connect(self.ctrl_enum_package_changed.emit)
+        self._ctrl_enum_path_edit.textChanged.connect(self.ctrl_enum_output_path_changed.emit)
+        self._ctrl_enum_path_browse_btn.clicked.connect(self._browse_ctrl_enum_path)
+
+    def _on_ctrl_enum_toggled(self, checked: bool):
+        self._ctrl_enum_pkg_edit.setEnabled(checked)
+        self._ctrl_enum_path_edit.setEnabled(checked)
+        self._ctrl_enum_path_browse_btn.setEnabled(checked)
+        self.ctrl_enum_toggled.emit(checked)
+
     def set_profile_list(self, names: list[str], current: str = ""):
         self._profile_combo.blockSignals(True)
         self._profile_combo.clear()
@@ -208,16 +244,31 @@ class GroupEditorPanel(QWidget):
             self._profile_combo.setCurrentText(current)
         self._profile_combo.blockSignals(False)
 
-    def set_profile_fields(self, name: str, output_path: str, package_name: str):
+    def set_profile_fields(self, name: str, output_path: str, package_name: str,
+                           generate_ctrl_enum: bool = False,
+                           ctrl_enum_package: str = "mq.util",
+                           ctrl_enum_output_path: str = ""):
         self._profile_name_edit.blockSignals(True)
         self._output_edit.blockSignals(True)
         self._package_edit.blockSignals(True)
+        self._ctrl_enum_check.blockSignals(True)
+        self._ctrl_enum_pkg_edit.blockSignals(True)
+        self._ctrl_enum_path_edit.blockSignals(True)
         self._profile_name_edit.setText(name)
         self._output_edit.setText(output_path)
         self._package_edit.setText(package_name)
+        self._ctrl_enum_check.setChecked(generate_ctrl_enum)
+        self._ctrl_enum_pkg_edit.setText(ctrl_enum_package)
+        self._ctrl_enum_pkg_edit.setEnabled(generate_ctrl_enum)
+        self._ctrl_enum_path_edit.setText(ctrl_enum_output_path)
+        self._ctrl_enum_path_edit.setEnabled(generate_ctrl_enum)
+        self._ctrl_enum_path_browse_btn.setEnabled(generate_ctrl_enum)
         self._profile_name_edit.blockSignals(False)
         self._output_edit.blockSignals(False)
         self._package_edit.blockSignals(False)
+        self._ctrl_enum_check.blockSignals(False)
+        self._ctrl_enum_pkg_edit.blockSignals(False)
+        self._ctrl_enum_path_edit.blockSignals(False)
 
     def get_profile_fields(self) -> tuple:
         return (
@@ -259,3 +310,8 @@ class GroupEditorPanel(QWidget):
         if path:
             self._output_edit.setText(path)
         return path
+
+    def _browse_ctrl_enum_path(self):
+        path = QFileDialog.getExistingDirectory(self, "选择 CtrlEnum.scala 输出目录")
+        if path:
+            self._ctrl_enum_path_edit.setText(path)

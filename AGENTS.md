@@ -28,6 +28,9 @@ VisualDecoder 是一个基于 PyQt6 的桌面工具，通过可视化界面将 R
   - `selected_extensions`: 选中的 RISC-V 扩展列表（如 `["rv_i", "rv_m"]`）
   - `decoders`: 一组 Decoder 定义（支持多个 CtrlEnum+Field 组合）
   - `package_name`: 生成的 Scala 包名（默认 `mq.util.decoder`）
+  - `generate_ctrl_enum`: 是否导出 `CtrlEnum.scala` 基类文件（默认 `false`）
+  - `ctrl_enum_package`: `CtrlEnum.scala` 的包名（默认 `mq.util`）
+  - `ctrl_enum_output_path`: `CtrlEnum.scala` 的单独输出目录（默认空串，留空使用 `output_path`）
 
 ### 2. Decoder
 - 一个 Decoder 对应一个 `CtrlEnum` + `DecodeField` 的组合
@@ -66,7 +69,9 @@ VisualDecoder 是一个基于 PyQt6 的桌面工具，通过可视化界面将 R
 │  ☑ rv_i           │ + 新建/删除/切换/复制 │ 实时预览             │
 │  ☐ rv_m           │                      │ 语法高亮             │
 │  ☐ rv_zicsr       │ 名称/包名/输出路径    │ 复制到剪贴板         │
-│                    │                      │ 导出 .scala 文件     │
+│                    │ ☐ 生成 CtrlEnum.scala│ 导出 .scala 文件     │
+│                    │ 包名: [mq.util]       │                     │
+│                    │ 路径: [...]  [...]     │                     │
 │ [变量字段筛选]      │ Decoder: InstType     │                     │
 │  ☑ rd             │  模式: [OneHot ▼]    │                     │
 │  ☐ rs1            │  + 新建/删除          │                     │
@@ -230,6 +235,41 @@ object DecodeFields {
 }
 ```
 
+### CtrlEnum.scala 基类模板
+
+当 Profile 中 `generate_ctrl_enum = true` 时，导出代码同步生成 `CtrlEnum.scala` 基类文件，包名由 `ctrl_enum_package` 控制：
+
+```scala
+package %PACKAGE%
+
+import chisel3._
+import chisel3.util._
+
+object CtrlEnum extends Enumeration {
+  type enumType = Value
+  val Binary, OneHot, Gray = Value
+}
+
+abstract class CtrlEnum(mode: CtrlEnum.enumType) {
+  private var counter = 0
+  private var valuesList = Seq.empty[Int]
+
+  def BinarytoGray(binary: Int): Int = binary ^ (binary >> 1)
+  def BinarytoOneHot(binary: Int): Int = 1 << binary
+
+  def Value: Int = { /* Binary/OneHot/Gray 编码 */ }
+  def Values: Seq[UInt] = valuesList.map(v => v.U(getWidth.W))
+  def getWidth: Int = { /* log2Ceil(n) 或 n */ }
+
+  object Mux {
+    def apply[T <: Data](key: UInt, default: T)(mapping: Seq[T]): T = { /* Mux1H / MuxLookup */ }
+  }
+  object PriorityMux {
+    def apply[T <: Data](key: UInt, default: T)(mapping: Seq[T]): T = { /* PriorityMux (仅 OneHot) */ }
+  }
+}
+```
+
 ---
 
 ### Instructions.scala 输出模板
@@ -311,6 +351,9 @@ object Instructions {
           │
           ▼
    Instructions.scala    ← 指令数据库文件，按扩展分组
+          │
+          ▼
+   CtrlEnum.scala       ← 可选：CtrlEnum 基类文件（generate_ctrl_enum=true 时生成）
 ```
 
 ---
@@ -389,6 +432,9 @@ chisel-demo/                         # Chisel Decoder 演示项目（独立 SBT/
   "name": "my_config",
   "output_path": "/home/user/project/src/main/scala/mq/util/decoder",
   "package_name": "mq.util.decoder",
+  "generate_ctrl_enum": false,
+  "ctrl_enum_package": "mq.util",
+  "ctrl_enum_output_path": "",
   "selected_extensions": ["rv_i", "rv_m"],
   "decoders": [
     {
@@ -656,6 +702,7 @@ QScrollArea { background-color: #1f202a; border: none; }
 ## 待确认事项
 
 - [x] 一键复制到剪贴板（已实现）
+- [x] 可选生成 CtrlEnum.scala 基类文件（已实现）
 - [ ] 是否需要支持从 `inst.chisel` 文件导入额外的指令信息（如指令类型分类映射）？
 - [ ] 生成的 .scala 文件是否需要一个包对象（package.scala）来统一管理 import？
 - [ ] 是否需要支持拖拽分组排序（替代当前的上移/下移按钮）？

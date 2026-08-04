@@ -55,7 +55,7 @@ object InstTypeField extends DecodeField[InstructionPattern, UInt] {
 }
 ```
 
-导出时同时生成 `DecodeFields.scala` 和 `Instructions.scala`：
+导出时同时生成 `DecodeFields.scala` 和 `Instructions.scala`。可选生成 `CtrlEnum.scala`（CtrlEnum 基类，含 Binary/OneHot/Gray 编码、Mux、PriorityMux）：
 
 ```scala
 // DecodeFields.scala — 聚合所有 DecodeField
@@ -80,6 +80,20 @@ object Instructions {
   def db(): Seq[InstructionPattern] = { ... }
   def print() = { ... }
 }
+
+// CtrlEnum.scala — 可选生成的基类文件（Profile 中勾选"生成 CtrlEnum.scala"）
+object CtrlEnum extends Enumeration {
+  type enumType = Value
+  val Binary, OneHot, Gray = Value
+}
+
+abstract class CtrlEnum(mode: CtrlEnum.enumType) {
+  def Value: Int = { ... }           // 编码生成（Binary/OneHot/Gray）
+  def Values: Seq[UInt] = { ... }    // 所有编码值
+  def getWidth: Int = { ... }        // 位宽
+  object Mux { ... }                 // 硬件多路选择器
+  object PriorityMux { ... }         // 优先级选择器（仅 OneHot）
+}
 ```
 
 在硬件中使用：
@@ -92,6 +106,10 @@ io.alu.op   := result(ALUOpField)
 ```
 
 ## 额外功能
+
+### 可选生成 CtrlEnum.scala
+
+在 Profile 设置中勾选"生成 CtrlEnum.scala"并指定包名（默认 `mq.util`）和输出路径（留空则使用上方输出路径），导出时会同时生成 `CtrlEnum.scala` 基类文件，包含 `CtrlEnum` 抽象类（Binary/OneHot/Gray 编码、`Mux`、`PriorityMux`）。该文件是所有解码器代码的依赖基础。
 
 ### 主题切换
 
