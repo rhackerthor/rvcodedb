@@ -6,7 +6,7 @@
 
 ```bash
 git clone --recursive <repo-url>
-cd rvcodedb
+cd VirtualDecoder
 make init      # 拉取子模块 → 生成指令数据库 → 创建虚拟环境
 make run       # 启动应用
 ```
@@ -99,7 +99,7 @@ abstract class CtrlEnum(mode: CtrlEnum.enumType) {
 在硬件中使用：
 
 ```scala
-val table = new DecodeTable(Decoder.getDB(dbPath), DecodeFields.all)
+val table = new DecodeTable(Instructions.db(), DecodeFields.all())
 val result = table.decode(io.inst)
 io.iType    := result(InstTypeField)
 io.alu.op   := result(ALUOpField)
@@ -126,19 +126,25 @@ io.alu.op   := result(ALUOpField)
 
 ## Chisel Decoder 演示
 
-`chisel-demo/` 目录包含一个独立的 Chisel 演示工程，展示 `CtrlEnum + DecodeTable` 的完整硬件解码流程：
+`chisel-demo/` 目录包含一个独立的 SBT Chisel 演示工程，展示从 VisualDecoder 生成的解码器代码到硬件解码的完整流程（与 `mini-mq` 的译码方式一致）：
 
 ```bash
 cd chisel-demo
-make test      # 6 个测试用例
-make verilog   # 生成 Verilog
+make test      # 6 个测试用例（ChiselSim 硬件仿真）
+make verilog   # 生成 Verilog → build/DecoderDemo.sv
 ```
+
+演示内容：
+
+1. `InstTypeCtrl` / `ALUOpCtrl` — VisualDecoder 导出的代码格式（CtrlEnum 分组 + DecodeField），可直接替换复用
+2. `DecoderDemo` 模块 — `new DecodeTable(Instructions.db(), DecodeFields.all())` 硬件解码指令，输出 iType / aluOp / aluRes
+3. OneHot 按位判断（`iType(InstTypeCtrl.ALU)`）+ `CtrlEnum.Mux` 选通 ALU 结果
 
 ## 环境要求
 
 - Python >= 3.10
 - PyQt6（自动安装）
-- Chisel 演示需 JDK 和 SBT/Mill
+- Chisel 演示需 JDK 和 SBT
 
 ## 快捷键
 

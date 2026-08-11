@@ -361,7 +361,7 @@ object Instructions {
 ## 项目文件结构
 
 ```
-rvcodedb/
+VirtualDecoder/
 ├── Agent.md                        # 本文件
 ├── Makefile                        # 启动/构建/初始化脚本
 ├── requirements.txt                # Python 依赖（PyQt6）
@@ -400,25 +400,21 @@ rvcodedb/
 │       └── instruction_loader.py   # 指令数据加载、过滤工具函数
 └── .venv/                          # Python 虚拟环境（make run 自动创建）
 
-chisel-demo/                         # Chisel Decoder 演示项目（独立 SBT/Mill 工程）
-├── build.sbt / build.mill / Makefile
+chisel-demo/                         # Chisel Decoder 演示项目（独立 SBT 工程）
+├── build.sbt / Makefile
 ├── src/main/scala/
-│   ├── Main.scala                   # 入口：生成 Verilog
-│   ├── Demo.scala                   # DecoderDemo 模块：解码指令，输出 InstType + ALUOp
+│   ├── Main.scala                   # 入口：生成 Verilog（build/DecoderDemo.sv）
+│   ├── Demo.scala                   # DecoderDemo 模块：解码指令，输出 iType + aluOp + aluRes
 │   └── util/
-│       ├── CtrlEnum.scala           # 枚举编码（Binary/OneHot/Gray + Mux）
+│       ├── CtrlEnum.scala           # 枚举编码基类（Binary/OneHot/Gray + Mux/PriorityMux）
 │       └── decoder/
-│           ├── InstructionPattern.scala  # 指令模式匹配
-│           ├── DBReader.scala        # .db 文件读取器
-│           ├── Decoder.scala         # Decoder 对象：getFields → DecodeFields.all + getDB → DecodeTable
-│           ├── InstTypeCtrl.scala    # 指令类型枚举（ALU/MUL/DIV/LSU/BRU）
-│           ├── InstTypeField.scala   # InstType 解码字段
-│           ├── ALUOpCtrl.scala       # ALU 操作枚举（ADD/SLT/AND/OR/XOR/SLL/SRL/SRA）
-│           └── ALUOpField.scala      # ALUOp 解码字段
-├── src/main/resources/rvdb/
-│   └── riscv-opcode.db              # RV32I + M 指令数据库（45条指令）
+│           ├── InstructionPattern.scala  # 指令模式类（DecodePattern + nameMatch）
+│           ├── Instructions.scala        # 指令数据库（RV32I 子集 18 条，BitPat）
+│           ├── InstTypeCtrl.scala        # 指令类型枚举（ALU/LSU/BRU，OneHot）
+│           ├── ALUOpCtrl.scala           # ALU 操作枚举（ADD/SUB/SLT/XOR/OR/AND/SLL/SRL/SRA）
+│           └── DecodeFields.scala        # Field 聚合（DecodeFields.all）
 └── src/test/scala/
-    └── DecoderTest.scala            # 6 个测试用例，验证指令解码正确性
+    └── DecoderDemoTest.scala        # ChiselSim 硬件仿真，6 个测试用例（ChiselSim）
 ```
 
 ---
@@ -513,7 +509,8 @@ chisel-demo/                         # Chisel Decoder 演示项目（独立 SBT/
 
 ## Chisel Decoder 演示项目 (`chisel-demo/`)
 
-独立的 SBT/Mill Chisel 工程，展示从指令数据库到硬件解码器的完整流程。
+独立的 SBT Chisel 工程，展示从 VisualDecoder 生成的解码器代码到硬件解码的完整流程。
+`InstTypeCtrl.scala` / `ALUOpCtrl.scala` 即为 VisualDecoder 导出的代码格式，直接替换即可复用。
 
 ### 运行方式
 
@@ -526,24 +523,24 @@ make verilog   # 生成 Verilog → build/DecoderDemo.sv
 ### Decode 流程
 
 ```
-riscv-opcode.db ──→ DBReader ──→ Seq[InstructionPattern]
-                                       │
-          ┌────────────────────────────┤
-          ▼                            ▼
-   InstTypeCtrl (OneHot)      ALUOpCtrl (OneHot)
-   InstTypeField              ALUOpField
-          │                            │
-          └────────┬───────────────────┘
-                   ▼
-            DecodeTable ──→ decode(inst: UInt) ──→ Map[DecodeField, UInt]
-                   │
-          ┌────────┴────────┐
-          ▼                 ▼
-    result(InstTypeField)  result(ALUOpField)
-          │                 │
-          ▼                 ▼
-   CtrlEnum.Mux(key)   CtrlEnum.Mux(key)
-   (硬件多路选择器)      (硬件多路选择器)
+Instructions.scala (BitPat) ──→ Instructions.db() ──→ Seq[InstructionPattern]
+                                        │
+           ┌────────────────────────────┤
+           ▼                            ▼
+    InstTypeCtrl (OneHot)      ALUOpCtrl (OneHot)
+    InstTypeField              ALUOpField
+           │                            │
+           └────────┬───────────────────┘
+                    ▼
+             DecodeTable ──→ decode(inst: UInt) ──→ Map[DecodeField, UInt]
+                    │
+           ┌────────┴────────┐
+           ▼                 ▼
+     result(InstTypeField)  result(ALUOpField)
+           │                 │
+           ▼                 ▼
+     iType(InstTypeCtrl.ALU)  CtrlEnum.Mux(key)
+     (OneHot 按位判断)         (硬件多路选择器)
 ```
 
 ### 关键代码示例
@@ -551,8 +548,8 @@ riscv-opcode.db ──→ DBReader ──→ Seq[InstructionPattern]
 **CtrlEnum 定义 (OneHot 编码)**:
 ```scala
 object InstTypeCtrl extends CtrlEnum(CtrlEnum.OneHot) {
-  val ALU, MUL, DIV, LSU, BRU = Value  // 0b00001, 0b00010, 0b00100, 0b01000, 0b10000
-  def isALU: Seq[String] = Seq("add", "addi", "and", ...)  // 指令→枚举值 映射表
+  val ALU, LSU, BRU = Value  // 0b001, 0b010, 0b100
+  def isALU: Seq[String] = Seq("ADD", "ADDI", "SUB", ...)  // 指令→枚举值 映射表
 }
 ```
 
@@ -562,7 +559,7 @@ object InstTypeField extends DecodeField[InstructionPattern, UInt] {
   override def name: String = "InstTypeField"
   override def chiselType: UInt = UInt(InstTypeCtrl.getWidth.W)
   private def map: Seq[(Seq[String], UInt)] = Seq(
-    InstTypeCtrl.isALU -> InstTypeCtrl.Values(InstTypeCtrl.ALU),  // Seq["add","addi",...] -> 0b00001.U
+    InstTypeCtrl.isALU -> InstTypeCtrl.Values(InstTypeCtrl.ALU),  // Seq["ADD","ADDI",...] -> 0b001.U
     ...
   )
   override def genTable(op: InstructionPattern): BitPat = {
@@ -571,23 +568,25 @@ object InstTypeField extends DecodeField[InstructionPattern, UInt] {
 }
 ```
 
-**硬件模块中使用**:
+**硬件模块中使用**（参考 `Demo.scala`）:
 ```scala
-val table = new DecodeTable(Decoder.getDB(dbPath), Decoder.getFields())
+val table = new DecodeTable(decoder.Instructions.db(), decoder.DecodeFields.all())
 val result = table.decode(io.inst)           // 解码一条指令
-val iType = result(InstTypeField)            // 提取指令类型（OneHot 编码）
-val isALU = iType(InstTypeCtrl.ALU)          // 按位判断是否为 ALU 指令
+val iType = result(decoder.InstTypeField)    // 提取指令类型（OneHot 编码）
+val isALU = iType(decoder.InstTypeCtrl.ALU)  // 按位判断是否为 ALU 指令
 
 // 使用 CtrlEnum.Mux 实现硬件多路选择
-val aluResult = ALUOpCtrl.Mux(aluOp, 0.U)(Seq(
-  a + b,    // ADD
-  slt,      // SLT
-  a & b,    // AND
-  a | b,    // OR
-  a ^ b,    // XOR
-  a << b,   // SLL
-  a >> b,   // SRL
-  sraRes    // SRA
+val sraRes = (a.asSInt >> b(4, 0)).asUInt
+val aluResult = decoder.ALUOpCtrl.Mux(aluOp, 0.U(32.W))(Seq(
+  a + b,           // ADD
+  a - b,           // SUB
+  a < b,           // SLT / SLTU
+  a ^ b,           // XOR
+  a | b,           // OR
+  a & b,           // AND
+  a << b(4, 0),    // SLL
+  a >> b(4, 0),    // SRL
+  sraRes           // SRA
 ))
 ```
 
@@ -595,12 +594,14 @@ val aluResult = ALUOpCtrl.Mux(aluOp, 0.U)(Seq(
 
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `CtrlEnum.scala` | 80 | 枚举编码基类，支持 Binary/OneHot/Gray，提供 Mux/PriorityMux 硬件选择器 |
-| `InstructionPattern.scala` | 30 | 指令模式类，继承 DecodePattern，实现 BitPat 和 nameMatch |
-| `DBReader.scala` | 25 | 从空格分隔的 .db 文件读取指令并构建 InstructionPattern 列表 |
-| `Decoder.scala` | 15 | Decoder 伴生对象，聚合所有 Field 和 DB 加载逻辑 |
-| `Demo.scala` | 30 | 演示模块：解码 RISC-V 指令，输出 InstType 和 ALUOp |
-| `DecoderTest.scala` | 80 | 6 个测试用例，验证 ADD/BEQ/LW/XOR/OR 等指令的正确解码 |
+| `CtrlEnum.scala` | 72 | 枚举编码基类，支持 Binary/OneHot/Gray，提供 Mux/PriorityMux 硬件选择器 |
+| `InstructionPattern.scala` | 21 | 指令模式类，继承 DecodePattern，实现 BitPat 和 nameMatch |
+| `Instructions.scala` | 30 | 指令数据库（RV32I 子集 18 条，BitPat 格式与 VisualDecoder 导出一致） |
+| `InstTypeCtrl.scala` | 86 | 指令类型枚举（ALU/LSU/BRU，OneHot）+ DecodeField |
+| `ALUOpCtrl.scala` | 92 | ALU 操作枚举（9 个分组，OneHot）+ DecodeField |
+| `DecodeFields.scala` | 29 | Field 聚合（DecodeFields.all） |
+| `Demo.scala` | 60 | 演示模块：解码 RISC-V 指令，输出 iType/aluOp/aluRes |
+| `DecoderDemoTest.scala` | 50 | 6 个测试用例（ChiselSim），验证 ADD/SUB/LW/BEQ/SLL/SRA 的解码与 ALU 结果 |
 
 ---
 
