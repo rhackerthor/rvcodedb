@@ -13,6 +13,7 @@ $(VENV)/bin/python3:
 init:
 	git submodule update --init --recursive
 	$(MAKE) -C riscv-opcodes EXTENSIONS=$(EXTENSIONS)
+	rm -rf $(VENV)
 	python3 -m venv $(VENV)
 	$(PIP) install -r requirements.txt
 
