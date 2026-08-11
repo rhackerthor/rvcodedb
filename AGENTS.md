@@ -1,7 +1,7 @@
-# 项目：可视化 Chisel Decoder 代码生成器 VisualDecoder
+# 项目：可视化译码器 VisualDecoder
 
 ## 概述
-VisualDecoder 是一个基于 PyQt6 的桌面工具，通过可视化界面将 RISC-V 指令与独热码/二进制/格雷码信号进行映射，并自动生成 Chisel 硬件解码器代码（`CtrlEnum` + `DecodeField` 模式）。
+VisualDecoder（可视化译码器）是一个基于 PyQt6 的桌面工具，通过可视化界面将 RISC-V 指令与独热码/二进制/格雷码信号进行映射，并自动生成 Chisel 硬件译码器代码（`CtrlEnum` + `DecodeField` 模式）。
 
 ---
 
@@ -361,7 +361,7 @@ object Instructions {
 ## 项目文件结构
 
 ```
-VirtualDecoder/
+VisualDecoder/
 ├── Agent.md                        # 本文件
 ├── Makefile                        # 启动/构建/初始化脚本
 ├── requirements.txt                # Python 依赖（PyQt6）

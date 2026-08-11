@@ -1,12 +1,12 @@
-# VisualDecoder
+# VisualDecoder（可视化译码器）
 
-可视化 Chisel 硬件解码器代码生成工具。通过图形界面将 RISC-V 指令映射到控制信号（OneHot / Binary / Gray），自动生成 Chisel `CtrlEnum` + `DecodeField` 代码。
+可视化 Chisel 硬件译码器代码生成工具。通过图形界面将 RISC-V 指令映射到控制信号（OneHot / Binary / Gray），自动生成 Chisel `CtrlEnum` + `DecodeField` 代码。
 
 ## 快速开始
 
 ```bash
 git clone --recursive <repo-url>
-cd VirtualDecoder
+cd VisualDecoder
 make init      # 拉取子模块 → 生成指令数据库 → 创建虚拟环境
 make run       # 启动应用
 ```
